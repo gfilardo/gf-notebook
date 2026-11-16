@@ -168,4 +168,3 @@ In the next article, we examine that fundamental boundary: **who can confirm on 
 - [OWASP: Validate permissions on every request](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html#validate-the-permissions-on-every-request) — the established enforcement principle, separate from the new interaction model.
 
 *Documentation checked on 30 October 2026. WebMCP is evolving; specification text, browser implementation and agent-host behavior should be checked separately.*
-
