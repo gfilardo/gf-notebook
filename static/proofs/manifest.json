@@ -175,6 +175,18 @@
           "gitCommit": "9737af2393279968ef06f095ad926fd02c06285b",
           "bitcoinBlock": null,
           "bitcoinBlockTime": null
+        },
+        {
+          "version": 3,
+          "path": "content/posts/webmcp-agent-shortcuts-and-unintentional-dark-patterns.md",
+          "fileHash": "db379118130e954e41e1efae5ea93275c5df460dfa8a119130baa7364195febe",
+          "proofFile": "static/proofs/webmcp-agent-shortcuts-and-unintentional-dark-patterns/v3.ots",
+          "otsUrl": "/proofs/webmcp-agent-shortcuts-and-unintentional-dark-patterns/v3.ots",
+          "stampedAt": "2026-11-16T23:06:09.348Z",
+          "status": "pending",
+          "gitCommit": "81cc3c27ff2fd7860e6e11b04c0d43aa9885df5f",
+          "bitcoinBlock": null,
+          "bitcoinBlockTime": null
         }
       ]
     },
