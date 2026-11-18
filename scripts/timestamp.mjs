@@ -80,7 +80,7 @@ export function getGitCommit(root, filePath) {
   return null;
 }
 
-export async function scanArticles(root) {
+export async function scanArticles(root, options = {}) {
   const manifest = await loadManifest(root);
   const postsDir = path.join(root, 'content/posts');
   const files = (await readdir(postsDir)).filter(f => f.endsWith('.md')).sort();
@@ -96,17 +96,84 @@ export async function scanArticles(root) {
     const hash = computeSha256(rawBuffer);
 
     const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(rawText);
-    if (!match) continue;
+    if (!match) {
+      if (!options.silent) {
+        console.warn(`[OpenTimestamps] Warning: Skipping "${filename}" - missing YAML frontmatter.`);
+      }
+      results.push({
+        id: null,
+        title: filename,
+        filename,
+        filePath,
+        relPath,
+        fileHash: hash,
+        status: 'INVALID',
+        error: 'Missing YAML frontmatter',
+        timestampEnabled: false,
+        proposedVersion: 1,
+        latestVersion: null,
+        proofStatus: null,
+        bitcoinBlock: null,
+        bitcoinBlockTime: null,
+        proofFile: null,
+        previousPath: null
+      });
+      continue;
+    }
 
     let frontmatter;
     try {
       frontmatter = YAML.parse(match[1]);
-    } catch {
+    } catch (parseErr) {
+      if (!options.silent) {
+        console.warn(`[OpenTimestamps] Warning: Skipping "${filename}" - invalid YAML frontmatter: ${parseErr.message}`);
+      }
+      results.push({
+        id: null,
+        title: filename,
+        filename,
+        filePath,
+        relPath,
+        fileHash: hash,
+        status: 'INVALID',
+        error: `Invalid frontmatter: ${parseErr.message}`,
+        timestampEnabled: false,
+        proposedVersion: 1,
+        latestVersion: null,
+        proofStatus: null,
+        bitcoinBlock: null,
+        bitcoinBlockTime: null,
+        proofFile: null,
+        previousPath: null
+      });
       continue;
     }
 
-    const id = frontmatter.id;
-    if (!id) continue;
+    const id = frontmatter?.id;
+    if (!id) {
+      if (!options.silent) {
+        console.warn(`[OpenTimestamps] Warning: Skipping "${filename}" - missing required "id" in frontmatter.`);
+      }
+      results.push({
+        id: null,
+        title: frontmatter?.title || filename,
+        filename,
+        filePath,
+        relPath,
+        fileHash: hash,
+        status: 'MISSING_ID',
+        error: 'Missing required "id" in frontmatter',
+        timestampEnabled: false,
+        proposedVersion: 1,
+        latestVersion: null,
+        proofStatus: null,
+        bitcoinBlock: null,
+        bitcoinBlockTime: null,
+        proofFile: null,
+        previousPath: null
+      });
+      continue;
+    }
     scannedIds.add(id);
 
     const isEnabled = frontmatter.timestamp !== false;
@@ -210,11 +277,15 @@ export async function submitToCalendars(hashBuffer, calendars = DEFAULT_CALENDAR
 }
 
 export async function stampArticle(root, targetIdOrPath, options = {}) {
-  const articles = await scanArticles(root);
+  const articles = await scanArticles(root, { silent: true });
   const target = articles.find(a => a.id === targetIdOrPath || a.filename === targetIdOrPath || a.relPath === targetIdOrPath);
 
   if (!target) {
-    throw new Error(`Article not found: "${targetIdOrPath}". Available IDs: ${articles.map(a => a.id).join(', ')}`);
+    throw new Error(`Article not found: "${targetIdOrPath}". Available IDs: ${articles.filter(a => a.id).map(a => a.id).join(', ')}`);
+  }
+
+  if (target.status === 'MISSING_ID' || target.status === 'INVALID') {
+    throw new Error(`Cannot stamp "${target.filename}": ${target.error}`);
   }
 
   if (!target.timestampEnabled && !options.force) {
@@ -358,61 +429,110 @@ export async function upgradeProofs(root, targetId = null, options = {}) {
 
   for (const [id, article] of Object.entries(manifest.articles || {})) {
     if (targetId && id !== targetId) continue;
-    const latest = article.versions?.[article.versions.length - 1];
-    if (!latest) continue;
+    const versions = article.versions || [];
+    if (versions.length === 0) continue;
 
-    const proofAbsPath = path.join(root, latest.proofFile);
-    let proofBuf;
-    try {
-      proofBuf = await readFile(proofAbsPath);
-    } catch {
-      results.push({ id, version: latest.version, upgraded: false, status: latest.status, error: 'Proof file missing' });
-      continue;
-    }
-
-    let detached;
-    try {
-      detached = OpenTimestamps.DetachedTimestampFile.deserialize(proofBuf);
-    } catch (err) {
-      results.push({ id, version: latest.version, upgraded: false, status: latest.status, error: `Invalid proof format: ${err.message}` });
-      continue;
-    }
-
-    if (detached.timestamp.isTimestampComplete()) {
-      const attestations = Array.from(detached.timestamp.allAttestations().values());
-      const btc = attestations.find(a => a instanceof OpenTimestamps.Notary.BitcoinBlockHeaderAttestation);
-      if (btc && (latest.status !== 'anchored' || latest.bitcoinBlock !== btc.height)) {
-        latest.status = 'anchored';
-        latest.bitcoinBlock = btc.height;
-        manifestUpdated = true;
+    for (const v of versions) {
+      if (v.status === 'anchored' && v.bitcoinBlock && !options.force) {
+        results.push({
+          id,
+          version: v.version,
+          upgraded: false,
+          status: 'anchored',
+          alreadyComplete: true,
+          bitcoinBlock: v.bitcoinBlock
+        });
+        continue;
       }
-      results.push({ id, version: latest.version, upgraded: false, status: 'anchored', alreadyComplete: true, bitcoinBlock: latest.bitcoinBlock || btc?.height });
-      continue;
-    }
 
-    try {
-      const changed = await OpenTimestamps.upgrade(detached);
-      if (changed) {
-        const upgradedBuf = Buffer.from(detached.serializeToBytes());
-        await writeFile(proofAbsPath, upgradedBuf);
+      const proofAbsPath = path.isAbsolute(v.proofFile)
+        ? v.proofFile
+        : path.join(root, v.proofFile);
 
+      let proofBuf;
+      try {
+        proofBuf = await readFile(proofAbsPath);
+      } catch {
+        results.push({ id, version: v.version, upgraded: false, status: v.status, error: 'Proof file missing' });
+        continue;
+      }
+
+      let detached;
+      try {
+        detached = OpenTimestamps.DetachedTimestampFile.deserialize(proofBuf);
+      } catch (err) {
+        results.push({ id, version: v.version, upgraded: false, status: v.status, error: `Invalid proof format: ${err.message}` });
+        continue;
+      }
+
+      if (detached.timestamp.isTimestampComplete()) {
         const attestations = Array.from(detached.timestamp.allAttestations().values());
         const btc = attestations.find(a => a instanceof OpenTimestamps.Notary.BitcoinBlockHeaderAttestation);
-
         if (btc) {
-          latest.status = 'anchored';
-          latest.bitcoinBlock = btc.height;
-        } else if (detached.timestamp.isTimestampComplete()) {
-          latest.status = 'anchored';
+          if (v.status !== 'anchored' || v.bitcoinBlock !== btc.height) {
+            v.status = 'anchored';
+            v.bitcoinBlock = btc.height;
+            manifestUpdated = true;
+          }
+        } else if (v.status !== 'anchored') {
+          v.status = 'anchored';
+          manifestUpdated = true;
         }
 
-        manifestUpdated = true;
-        results.push({ id, version: latest.version, upgraded: true, status: latest.status, bitcoinBlock: latest.bitcoinBlock });
-      } else {
-        results.push({ id, version: latest.version, upgraded: false, status: latest.status, bitcoinBlock: latest.bitcoinBlock, pending: true });
+        results.push({
+          id,
+          version: v.version,
+          upgraded: false,
+          status: 'anchored',
+          alreadyComplete: true,
+          bitcoinBlock: v.bitcoinBlock || btc?.height
+        });
+        continue;
       }
-    } catch (err) {
-      results.push({ id, version: latest.version, upgraded: false, status: latest.status, error: err.message });
+
+      try {
+        const changed = await OpenTimestamps.upgrade(detached);
+        if (changed) {
+          const upgradedBuf = Buffer.from(detached.serializeToBytes());
+          await writeFile(proofAbsPath, upgradedBuf);
+
+          const attestations = Array.from(detached.timestamp.allAttestations().values());
+          const btc = attestations.find(a => a instanceof OpenTimestamps.Notary.BitcoinBlockHeaderAttestation);
+
+          if (btc) {
+            v.status = 'anchored';
+            v.bitcoinBlock = btc.height;
+          } else if (detached.timestamp.isTimestampComplete()) {
+            v.status = 'anchored';
+          }
+
+          manifestUpdated = true;
+          results.push({
+            id,
+            version: v.version,
+            upgraded: true,
+            status: v.status,
+            bitcoinBlock: v.bitcoinBlock
+          });
+        } else {
+          results.push({
+            id,
+            version: v.version,
+            upgraded: false,
+            status: v.status,
+            bitcoinBlock: v.bitcoinBlock,
+            pending: true
+          });
+        }
+      } catch (err) {
+        results.push({
+          id,
+          version: v.version,
+          upgraded: false,
+          status: v.status,
+          error: err.message
+        });
+      }
     }
   }
 
@@ -487,13 +607,34 @@ export async function installGitHook(root) {
   const hooksDir = path.join(gitDir, 'hooks');
   await mkdir(hooksDir, { recursive: true });
 
-  // Pre-push hook: strictly blocks pushing unanchored articles to public remote
   const prePushPath = path.join(hooksDir, 'pre-push');
-  const prePushContent = `#!/bin/sh
-# OpenTimestamps pre-push check: block public leak of unanchored content
-node scripts/timestamp.mjs check --push
-`;
-  await writeFile(prePushPath, prePushContent, 'utf8');
+  const hookCmd = 'node scripts/timestamp.mjs check --push';
+  const hookBlock = `\n# OpenTimestamps pre-push check: block public leak of unanchored content\n${hookCmd}\n`;
+
+  let existed = false;
+  let alreadyInstalled = false;
+
+  try {
+    const existingContent = await readFile(prePushPath, 'utf8');
+    existed = true;
+    if (existingContent.includes(hookCmd) || existingContent.includes('timestamp.mjs check --push')) {
+      alreadyInstalled = true;
+    } else {
+      // Append to existing hook without overwriting other user commands
+      const newContent = existingContent.endsWith('\n')
+        ? `${existingContent}${hookBlock}`
+        : `${existingContent}\n${hookBlock}`;
+      await writeFile(prePushPath, newContent, 'utf8');
+    }
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      const initialContent = `#!/bin/sh\n# OpenTimestamps pre-push check: block public leak of unanchored content\n${hookCmd}\n`;
+      await writeFile(prePushPath, initialContent, 'utf8');
+    } else {
+      throw err;
+    }
+  }
+
   await chmod(prePushPath, 0o755);
 
   // If a pre-commit hook exists from previous setup, remove it so local commits are completely unhindered
@@ -506,7 +647,7 @@ node scripts/timestamp.mjs check --push
     }
   } catch {}
 
-  return { skipped: false, prePushPath };
+  return { skipped: false, prePushPath, existed, alreadyInstalled };
 }
 
 // CLI Router
@@ -516,33 +657,38 @@ async function main() {
   const root = path.resolve(fileURLToPath(import.meta.url), '../..');
 
   if (cmd === 'status') {
-    const articles = await scanArticles(root);
+    const articles = await scanArticles(root, { silent: true });
     console.log('\nOpenTimestamps Provenance Status:\n' + '─'.repeat(78));
 
     let okCount = 0;
     let modCount = 0;
     let untrackedCount = 0;
+    let invalidCount = 0;
 
     for (const a of articles) {
+      const label = (a.id || a.filename).padEnd(35);
       if (a.status === 'UP_TO_DATE') {
         okCount++;
         const block = a.bitcoinBlock ? ` #Block ${a.bitcoinBlock}` : ' (pending confirmation)';
-        console.log(`  ✓ \x1b[32m${a.id.padEnd(35)}\x1b[0m v${a.latestVersion} [${a.proofStatus}${block}]`);
+        console.log(`  ✓ \x1b[32m${label}\x1b[0m v${a.latestVersion} [${a.proofStatus}${block}]`);
       } else if (a.status === 'MODIFIED') {
         modCount++;
-        console.log(`  ! \x1b[33m${a.id.padEnd(35)}\x1b[0m MODIFIED (current hash differs from v${a.latestVersion}) -> Propose v${a.proposedVersion}`);
+        console.log(`  ! \x1b[33m${label}\x1b[0m MODIFIED (current hash differs from v${a.latestVersion}) -> Propose v${a.proposedVersion}`);
       } else if (a.status === 'DISABLED') {
-        console.log(`  ⊘ \x1b[90m${a.id.padEnd(35)}\x1b[0m OPTED OUT (timestamp: false)`);
+        console.log(`  ⊘ \x1b[90m${label}\x1b[0m OPTED OUT (timestamp: false)`);
       } else if (a.status === 'MISSING') {
-        console.log(`  ? \x1b[31m${a.id.padEnd(35)}\x1b[0m MISSING on disk (last known at ${a.relPath})`);
+        console.log(`  ? \x1b[31m${label}\x1b[0m MISSING on disk (last known at ${a.relPath})`);
+      } else if (a.status === 'MISSING_ID' || a.status === 'INVALID') {
+        invalidCount++;
+        console.log(`  ✖ \x1b[31m${label}\x1b[0m ${a.error || 'INVALID'}`);
       } else {
         untrackedCount++;
-        console.log(`  + \x1b[36m${a.id.padEnd(35)}\x1b[0m UNTRACKED -> Propose v1`);
+        console.log(`  + \x1b[36m${label}\x1b[0m UNTRACKED -> Propose v1`);
       }
     }
 
     console.log('─'.repeat(78));
-    console.log(`Summary: ${okCount} up-to-date, ${modCount} modified, ${untrackedCount} untracked.`);
+    console.log(`Summary: ${okCount} up-to-date, ${modCount} modified, ${untrackedCount} untracked${invalidCount > 0 ? `, ${invalidCount} invalid` : ''}.`);
     if (modCount > 0 || untrackedCount > 0) {
       console.log('\nTo stamp pending changes, run:');
       console.log('  npm run timestamp:stamp -- --all');
@@ -557,7 +703,7 @@ async function main() {
     const isMock = args.includes('--mock');
     const isForce = args.includes('--force');
 
-    const articles = await scanArticles(root);
+    const articles = await scanArticles(root, { silent: true });
     const targets = [];
 
     if (targetArg) {
@@ -566,9 +712,17 @@ async function main() {
         console.error(`Article "${targetArg}" not found.`);
         process.exit(1);
       }
+      if (match.status === 'MISSING_ID' || match.status === 'INVALID') {
+        console.error(`Cannot stamp "${targetArg}": ${match.error}`);
+        process.exit(1);
+      }
       targets.push(match);
     } else if (isAll) {
       for (const a of articles) {
+        if (a.status === 'MISSING_ID' || a.status === 'INVALID') {
+          console.warn(`  - Skipping ${a.filename}: ${a.error}`);
+          continue;
+        }
         if (a.status !== 'UP_TO_DATE' || isForce) {
           targets.push(a);
         }
@@ -606,32 +760,48 @@ async function main() {
   if (cmd === 'check') {
     const isPush = args.includes('--push');
     const isStrict = args.includes('--strict') || isPush;
-    const articles = await scanArticles(root);
+    const articles = await scanArticles(root, { silent: true });
     const unanchored = articles.filter(a => a.status === 'MODIFIED' || a.status === 'UNTRACKED');
+    const invalid = articles.filter(a => a.status === 'MISSING_ID' || a.status === 'INVALID');
 
-    if (unanchored.length === 0) {
+    if (unanchored.length === 0 && invalid.length === 0) {
       console.log('✓ OpenTimestamps check: All articles are anchored and up-to-date.');
       return;
     }
 
-    console.error('\n\x1b[31m========================================================================\x1b[0m');
-    console.error(`\x1b[31m[OpenTimestamps] ${isPush ? 'PUSH BLOCKED: Public repository protection' : 'VERIFICATION NOTICE'}\x1b[0m`);
-    console.error('\x1b[31m========================================================================\x1b[0m');
-    console.error(`The following ${unanchored.length} article(s) have unanchored content:`);
-    for (const a of unanchored) {
-      if (a.status === 'MODIFIED') {
-        console.error(`  - \x1b[33m${a.relPath}\x1b[0m: modified since v${a.latestVersion} (propose v${a.proposedVersion})`);
-      } else {
-        console.error(`  - \x1b[36m${a.relPath}\x1b[0m: untracked (propose v1)`);
+    if (invalid.length > 0) {
+      console.error('\n\x1b[31m========================================================================\x1b[0m');
+      console.error(`\x1b[31m[OpenTimestamps] ${isPush ? 'PUSH BLOCKED: Invalid article metadata' : 'METADATA ERROR'}\x1b[0m`);
+      console.error('\x1b[31m========================================================================\x1b[0m');
+      console.error(`The following ${invalid.length} article(s) have invalid frontmatter:`);
+      for (const a of invalid) {
+        console.error(`  - \x1b[31m${a.relPath}\x1b[0m: ${a.error}`);
       }
+      console.error('\nArticles without an "id" cannot be tracked or anchored in OpenTimestamps.');
+      console.error('Add a unique "id" to the frontmatter before pushing.');
+      console.error('\x1b[31m========================================================================\x1b[0m\n');
     }
-    console.error('\n\x1b[1mDo not push unanchored content to a public repository!\x1b[0m');
-    console.error('Anyone observing your commits could submit the same hash to the same block.');
-    console.error('\nTo anchor before pushing:');
-    console.error('  1. npm run timestamp:stamp -- --all');
-    console.error('  2. git add static/proofs/ content/posts/ && git commit -m "docs: anchor in OpenTimestamps"');
-    console.error('  3. git push');
-    console.error('\x1b[31m========================================================================\x1b[0m\n');
+
+    if (unanchored.length > 0) {
+      console.error('\n\x1b[31m========================================================================\x1b[0m');
+      console.error(`\x1b[31m[OpenTimestamps] ${isPush ? 'PUSH BLOCKED: Public repository protection' : 'VERIFICATION NOTICE'}\x1b[0m`);
+      console.error('\x1b[31m========================================================================\x1b[0m');
+      console.error(`The following ${unanchored.length} article(s) have unanchored content:`);
+      for (const a of unanchored) {
+        if (a.status === 'MODIFIED') {
+          console.error(`  - \x1b[33m${a.relPath}\x1b[0m: modified since v${a.latestVersion} (propose v${a.proposedVersion})`);
+        } else {
+          console.error(`  - \x1b[36m${a.relPath}\x1b[0m: untracked (propose v1)`);
+        }
+      }
+      console.error('\n\x1b[1mDo not push unanchored content to a public repository!\x1b[0m');
+      console.error('Anyone observing your commits could submit the same hash to the same block.');
+      console.error('\nTo anchor before pushing:');
+      console.error('  1. npm run timestamp:stamp -- --all');
+      console.error('  2. git add static/proofs/ content/posts/ && git commit -m "docs: anchor in OpenTimestamps"');
+      console.error('  3. git push');
+      console.error('\x1b[31m========================================================================\x1b[0m\n');
+    }
 
     if (isStrict) {
       process.exit(1);
@@ -645,15 +815,16 @@ async function main() {
     const results = await upgradeProofs(root, targetArg);
     let upgradedCount = 0;
     for (const r of results) {
+      const label = `${r.id} v${r.version}`.padEnd(40);
       if (r.upgraded) {
         upgradedCount++;
-        console.log(`  ✓ \x1b[32m${r.id.padEnd(35)}\x1b[0m UPGRADED -> anchored on Bitcoin block #${r.bitcoinBlock}`);
+        console.log(`  ✓ \x1b[32m${label}\x1b[0m UPGRADED -> anchored on Bitcoin block #${r.bitcoinBlock}`);
       } else if (r.alreadyComplete) {
-        console.log(`  ✓ \x1b[32m${r.id.padEnd(35)}\x1b[0m already anchored (block #${r.bitcoinBlock})`);
+        console.log(`  ✓ \x1b[32m${label}\x1b[0m already anchored (block #${r.bitcoinBlock})`);
       } else if (r.error) {
-        console.log(`  ! \x1b[33m${r.id.padEnd(35)}\x1b[0m error: ${r.error}`);
+        console.log(`  ! \x1b[33m${label}\x1b[0m error: ${r.error}`);
       } else {
-        console.log(`  ⏳ \x1b[36m${r.id.padEnd(35)}\x1b[0m pending confirmation on Bitcoin (calendars batch every ~2 hours)`);
+        console.log(`  ⏳ \x1b[36m${label}\x1b[0m pending confirmation on Bitcoin (calendars batch every ~2 hours)`);
       }
     }
     console.log(`\nSummary: ${upgradedCount} proof(s) upgraded.`);

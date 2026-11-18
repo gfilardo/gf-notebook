@@ -322,3 +322,100 @@ test('opentimestamps library integration: deserialize, info inspection, and upgr
   assert.equal(upgradeResults[0].id, 'ots-lib');
   assert.equal(upgradeResults[0].upgraded, false);
 });
+
+test('installGitHook preserves existing pre-push hook commands and is idempotent', async t => {
+  const dir = await testDir(t);
+  const gitDir = path.join(dir, '.git');
+  const hooksDir = path.join(gitDir, 'hooks');
+  await mkdir(hooksDir, { recursive: true });
+
+  const prePushPath = path.join(hooksDir, 'pre-push');
+  const customScript = '#!/bin/sh\necho "Running test suite before push"\nnpm test\n';
+  await writeFile(prePushPath, customScript, 'utf8');
+
+  // Install hook
+  const res1 = await installGitHook(dir);
+  assert.equal(res1.skipped, false);
+  const updatedContent = await readFile(prePushPath, 'utf8');
+
+  // Custom commands are preserved
+  assert.match(updatedContent, /echo "Running test suite before push"/);
+  assert.match(updatedContent, /npm test/);
+  // Timestamp check was appended
+  assert.match(updatedContent, /node scripts\/timestamp\.mjs check --push/);
+
+  // Second run is idempotent (does not duplicate the command)
+  const res2 = await installGitHook(dir);
+  assert.equal(res2.alreadyInstalled, true);
+  const secondContent = await readFile(prePushPath, 'utf8');
+  assert.equal(secondContent, updatedContent);
+});
+
+test('scanArticles detects missing id and invalid frontmatter, and flags MISSING_ID', async t => {
+  const dir = await testDir(t);
+
+  // File without ID
+  const noIdFile = path.join(dir, 'content/posts/no-id.md');
+  await writeFile(noIdFile, `---\ntitle: No ID Post\nauthor: "Giovanni Filardo"\nslug: no-id\ndate: "2026-11-10"\ndescription: Missing id\n---\nSome content.`);
+
+  // File with invalid frontmatter (no frontmatter delimiters)
+  const noFmFile = path.join(dir, 'content/posts/no-fm.md');
+  await writeFile(noFmFile, `# Just a markdown title\n\nNo frontmatter.`);
+
+  const scanned = await scanArticles(dir, { silent: true });
+  const noIdItem = scanned.find(a => a.filename === 'no-id.md');
+  assert.ok(noIdItem);
+  assert.equal(noIdItem.status, 'MISSING_ID');
+  assert.equal(noIdItem.id, null);
+  assert.match(noIdItem.error, /Missing required "id"/);
+
+  const noFmItem = scanned.find(a => a.filename === 'no-fm.md');
+  assert.ok(noFmItem);
+  assert.equal(noFmItem.status, 'INVALID');
+
+  // stampArticle refuses to stamp an article missing an ID
+  await assert.rejects(
+    () => stampArticle(dir, 'no-id.md', { mock: true }),
+    /Cannot stamp "no-id.md"/
+  );
+});
+
+test('upgradeProofs upgrades older pending versions and retains historical records', async t => {
+  const dir = await testDir(t);
+  const postFile = path.join(dir, 'content/posts/multi-version.md');
+  const postContentV1 = `---\nid: multi-version\ntitle: Multi Version\nauthor: "Giovanni Filardo"\nslug: multi-version\ndate: "2026-11-10"\ndescription: Testing multi-version upgrades\n---\nContent version 1.`;
+  await writeFile(postFile, postContentV1);
+
+  // 1. Stamp v1
+  await stampArticle(dir, 'multi-version', { mock: true });
+
+  // 2. Modify to v2 and stamp v2 while v1 is still pending
+  const postContentV2 = `${postContentV1}\n\nContent version 2.`;
+  await writeFile(postFile, postContentV2);
+  await stampArticle(dir, 'multi-version', { mock: true });
+
+  let manifest = await loadManifest(dir);
+  assert.equal(manifest.articles['multi-version'].versions.length, 2);
+  assert.equal(manifest.articles['multi-version'].versions[0].version, 1);
+  assert.equal(manifest.articles['multi-version'].versions[0].status, 'pending');
+  assert.equal(manifest.articles['multi-version'].versions[1].version, 2);
+  assert.equal(manifest.articles['multi-version'].versions[1].status, 'pending');
+
+  // 3. Run upgradeProofs
+  // Both v1 and v2 should be inspected and returned in results (not just v2)
+  const results = await upgradeProofs(dir, 'multi-version');
+  assert.equal(results.length, 2);
+  assert.equal(results[0].version, 1);
+  assert.equal(results[1].version, 2);
+
+  // 4. Anchored versions are recognized as complete
+  manifest = await loadManifest(dir);
+  manifest.articles['multi-version'].versions[0].status = 'anchored';
+  manifest.articles['multi-version'].versions[0].bitcoinBlock = 975431;
+  await saveManifest(dir, manifest);
+
+  const upgradeAgain = await upgradeProofs(dir, 'multi-version');
+  assert.equal(upgradeAgain.length, 2);
+  assert.equal(upgradeAgain[0].alreadyComplete, true);
+  assert.equal(upgradeAgain[0].bitcoinBlock, 975431);
+});
