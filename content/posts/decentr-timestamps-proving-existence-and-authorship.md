@@ -1,21 +1,21 @@
 ---
 id: decentralized-timestamps-pt1
-title: "Proving existence and authorship: decentralized timestamps and the longevity of proof"
+title: "Decentralized timestamps: proving existence and authorship"
 author: "Giovanni Filardo"
 slug: proving-existence-and-authorship-on-decentralized-ledgers
-date: "2026-11-09"
+date: "2026-11-19"
 description: "A first-principles guide to proving when a digital document existed and who created it, decoupling identity from crypto wallets, and evaluating ledger longevity."
 tags:
   - architecture
   - cryptography
   - bitcoin
+  - blockchain
   - software
 series:
   id: decentralized-timestamps
   title: "Decentralized timestamps"
   part: 1
-draft: false
-unlisted: true
+featured: true
 ---
 
 Whenever you publish an original technical specification, release open-source research, or record a digital commitment, you encounter an old and persistent problem in computer science: **how to prove priority**.
@@ -48,11 +48,11 @@ Proving that a digital artifact existed at a specific moment requires anchoring 
 
 ## Two models: wallet-bound versus decoupled timestamps
 
-To anchor a document's fingerprint to an immutable ledger, two architectural approaches have emerged in distributed systems: directly writing transaction records from a cryptocurrency wallet, or aggregating hashes off-chain and anchoring a single Merkle root to a Proof-of-Work blockchain.
+Public blockchains solve this by acting as decentralized, append-only ledgers: once a block is confirmed by network consensus, no single participant can alter its historical contents. To anchor a document's fingerprint to such a ledger, two architectural approaches have emerged: directly writing transaction records from a cryptocurrency wallet, or aggregating hashes off-chain and anchoring a single Merkle root—a master "hash of hashes" summarizing thousands of independent digests—to a blockchain.
 
 ### 1. The direct blockchain model (wallet-bound)
 
-The standard approach in many blockchain implementations is to compute a SHA-256 hash of a file (`#x12y`) and embed it directly into a transaction—for example, using a Bitcoin `OP_RETURN` script or an Ethereum smart contract call.
+The standard approach in many blockchain implementations is to compute a SHA-256 hash of a file and embed it directly into a transaction—for example, using an `OP_RETURN` script (a standard transaction output instruction that records a small data payload without creating spendable coins) or a smart contract call.
 
 ```mermaid#narrow The direct blockchain model: on-chain hashing and wallet-bound transactions.
 flowchart TD
@@ -76,8 +76,8 @@ In this model, the transaction itself serves as both timestamp and signature:
 - **Attribution** is bound directly to the cryptocurrency wallet that broadcasts the transaction. Because every blockchain transaction must be cryptographically signed by the private key controlling that address, nobody else can broadcast an `OP_RETURN` from your wallet. If your wallet address is publicly recognized as yours, impersonation is natively prevented.
 
 While conceptually straightforward, using your cryptocurrency wallet as your signing identity introduces serious practical drawbacks:
-1. **Financial friction**: Every document timestamp or revision incurs an on-chain transaction fee. If network fees spike, publishing or updating a document becomes artificially expensive.
-2. **Key management overhead**: Authors must maintain funded cryptocurrency wallets, manage seed phrases, and expose private keys within their automated build or deployment scripts.
+1. **Financial friction**: Every document timestamp or revision incurs an on-chain transaction fee. If network fees spike, publishing or updating a document becomes suddenly expensive.
+2. **Key management overhead**: Authors must maintain funded cryptocurrency wallets, manage seed phrases, and choose between exposing a hot-wallet private key to automated publishing scripts or manually signing a financial transaction on a hardware/air-gapped wallet for every revision.
 3. **Loss of privacy**: The author's personal or corporate identity becomes permanently linked on a public ledger to a specific financial address, exposing wallet balances and transaction history to public block explorers.
 4. **State bloat**: Writing individual document hashes directly onto an L1 chain forces every full node worldwide to permanently store personal metadata in their global state.
 
@@ -85,25 +85,25 @@ While conceptually straightforward, using your cryptocurrency wallet as your sig
 
 The alternative architecture—standardized by **OpenTimestamps (OTS)**, designed by Peter Todd—solves these problems by cleanly decoupling the proof of identity from the proof of anteriority.
 
-```mermaid#narrow The OpenTimestamps model: off-chain Merkle aggregation anchored to Bitcoin.
+```mermaid#narrow The OpenTimestamps model: off-chain Merkle aggregation anchored to a public blockchain.
 flowchart LR
     subgraph LOCAL["Author Environment (Zero Fees)"]
         direction TB
-        DOC["Original Document"] --> BUNDLE["Document + Detached Signature"]
-        BUNDLE --> HASH["Initial Leaf Hash (#1st)"]
+        DOC["Original Document"] --> BUNDLE["Payload + Author Attribution"]
+        BUNDLE --> HASH["Initial Leaf Hash"]
     end
 
-    subgraph CALENDAR["Federated Calendar Aggregators (Off-Chain)"]
+    subgraph CALENDAR["Calendar Servers (Off-Chain)"]
         direction TB
         HASH --> TREE["Off-Chain Merkle Tree"]
-        OTHERS["Other Users' Hashes (#tsh)"] --> TREE
-        TREE --> ROOT["Aggregated Merkle Root (#ty2y)"]
+        OTHERS["Other Users' Hashes"] --> TREE
+        TREE --> ROOT["Aggregated Merkle Root"]
     end
 
-    subgraph BITCOIN["Bitcoin Consensus"]
+    subgraph CHAIN["Blockchain Consensus"]
         direction TB
-        ROOT --> TX["Single Bitcoin Transaction<br/>(Funded by Calendar)"]
-        TX --> BLOCK["Bitcoin Block<br/>(Proof-of-Work Timestamp)"]
+        ROOT --> TX["Single L1 Transaction<br/>(Funded by Calendar)"]
+        TX --> BLOCK["Confirmed Block<br/>(Consensus Timestamp)"]
     end
 
     subgraph PROOF["Verifiable Proof"]
@@ -114,47 +114,48 @@ flowchart LR
 
 Rather than submitting transactions directly from a crypto wallet, the process separates into three distinct components:
 
-1. **Attribution through asymmetric identity (`SIG(doc, pk)`)**: The author signs the document using an established OpenPGP (GPG) or SSH key pair. This detached digital signature is bundled with the document to create an initial hash:
+1. **Off-chain attribution inside the hashed payload**: Instead of using a cryptocurrency wallet as an identity, the author includes attribution directly in the payload being hashed—either by embedding the author's name and metadata inside the document itself, or (when non-repudiation is needed) bundling a detached digital signature:
    ```text
-   Initial Hash (#1st) = SHA-256(document || signature)
+   Initial Hash = SHA-256(document payload)
    ```
-   A digital signature binds key possession to the statement. When that key is independently tied to an author (via GitHub, DNS records, or key directories), it provides cryptographic non-repudiation.
-2. **Scalable aggregation via Merkle trees**: The author submits this initial hash (`#1st`) to a federated OpenTimestamps calendar server. The calendar server collects thousands of independent hashes (`#tsh`) from other users and structures them into an off-chain Merkle tree. Intermediate hashes (`#ty2`) are iteratively combined until a single root hash (`#ty2y`) is produced.
-3. **Anchoring to Bitcoin Proof-of-Work**: The calendar server submits this single Merkle root (`#ty2y`) into the Bitcoin blockchain via an ordinary transaction.
+2. **Scalable aggregation via Merkle trees**: The author submits the initial hash to a federated OpenTimestamps calendar server. The calendar server collects thousands of independent hashes from other users and structures them into an off-chain Merkle tree. Intermediate hashes are iteratively combined until a single root hash is produced.
+3. **Anchoring to a public blockchain**: The calendar server commits this single Merkle root into a public blockchain via an ordinary transaction.
 
 This produces a clean separation of concerns:
-* **Anteriority** is derived from the Bitcoin block header that seals the Merkle root. Note that Bitcoin block header timestamps are governed by consensus rules (the Median Time Past of the previous 11 blocks must precede the timestamp, and the timestamp cannot exceed network-adjusted time by more than 2 hours). It serves as an immutable proof of prior existence with an approximate reference time, rather than a precision atomic clock.
-* **Attribution** is established by the cryptographic signature embedded inside the leaf hash (`#1st`).
+* **Anteriority** is derived from the confirmed block header that seals the Merkle root. Because block header timestamps are governed by network consensus rules, the block serves as an immutable proof of prior existence with an approximate reference time, rather than a precision atomic clock.
+* **Attribution** lives entirely off-chain inside the hashed leaf payload—either as an embedded author statement in the document itself or an optional off-chain signature—without touching a cryptocurrency wallet.
 
-Crucially, off-chain signing is necessary **specifically because of aggregation**. In OpenTimestamps, the single on-chain Bitcoin transaction is funded and signed by the calendar server operator, not by your personal wallet. Because the blockchain transaction no longer carries your signature, the Bitcoin ledger proves only that the Merkle root existed by that block—it has no knowledge of who authored the leaf document. An off-chain signature (such as an SSH key signature or signed Git commit) restores the missing identity binding without dragging back the financial cost, hot-wallet exposure, or privacy loss of direct blockchain transactions.
+Crucially, keeping attribution in the off-chain leaf payload is necessary **specifically because of aggregation**. In OpenTimestamps, the single on-chain transaction is funded and signed by the calendar server operator, not by your personal wallet. Because the blockchain transaction no longer carries your wallet signature, the ledger proves that the Merkle root existed by that block while keeping your financial identity, storage medium, and publishing workflow completely decoupled from the blockchain.
 
 ### The zero-fee economics: why authors pay nothing
 
-A frequent question from engineering leaders evaluating decentralized timestamps is: *Do I need a corporate crypto wallet, and how much will transaction fees cost?*
+Anchoring proofs to a public blockchain immediately raises a practical question: *Does this require a crypto wallet, and who pays the transaction fees?*
 
-In OpenTimestamps, the financial cost to authors is **zero**:
+In OpenTimestamps, the financial cost to the submitter is **zero**:
 
-* **Zero cryptocurrency or wallets**: Authors never purchase Bitcoin, handle private keys with funds, or manage seed phrases.
-* **Zero account overhead**: There are no API keys, accounts, or credit card subscriptions. Stamping is simply an unauthenticated HTTP `POST` sending 32 binary bytes to public calendar pools (`alice.btc.calendar.opentimestamps.org`, `a.pool.opentimestamps.org`, etc.).
-* **Batching subsidizes the blockchain fee**: The calendar servers combine incoming digests into off-chain Merkle trees. Every few hours, the calendar operator broadcasts a single Bitcoin transaction with the Merkle root in an `OP_RETURN` script.
-* **Public good funding**: The single Bitcoin transaction fee is paid by the calendar operators, funded by Bitcoin foundation grants and community sponsorships as public infrastructure. Because that single fee is amortized over hundreds of thousands of documents, the marginal cost per document is zero.
+* **Zero cryptocurrency or wallets**: Authors never purchase tokens, handle private keys with funds, or manage seed phrases.
+* **Zero account overhead**: There are no API keys, accounts, or credit card subscriptions. Stamping is simply an unauthenticated HTTP `POST` sending 32 binary bytes to public calendar pools (`a.pool.opentimestamps.org`, `b.pool.opentimestamps.org`, etc.).
+* **Batching subsidizes the blockchain fee**: The calendar servers combine incoming digests into off-chain Merkle trees. Every few hours, the calendar operator broadcasts a single on-chain transaction carrying the Merkle root in an `OP_RETURN` output.
+* **Public good infrastructure**: OpenTimestamps is free to the submitter because calendar operators (such as Peter Todd and fellow infrastructure maintainers) bear the on-chain transaction fees of committing aggregate Merkle roots to the blockchain. Funded as public infrastructure, a single transaction fee is amortized across hundreds of thousands of documents, reducing the marginal cost per submission to effectively zero.
 
-The only operational trade-off is **batching latency**. Instead of paying mining fees for instant 10-minute block inclusion, authors receive an immediate "pending" receipt, and the Bitcoin proof anchors permanently a few hours later when the calendar's batch transaction is mined. For technical writing, software releases, and architecture specifications, trading a few hours of latency for zero financial cost and zero wallet friction is an ideal operational trade-off.
-
-The resulting proof is a tiny, detached receipt (`.ots`, typically under 1 KB) that contains only the specific Merkle path connecting the author's initial hash to the Bitcoin block header.
+This model introduces two practical trade-offs:
+* **Batching latency**: Instead of paying transaction fees for immediate next-block inclusion, authors receive an instant "pending" receipt, and the proof anchors permanently a few hours later when the calendar's batch transaction is confirmed.
+* **Calendar concentration at submission time**: The public OpenTimestamps calendar pool is operated by a small number of maintainers, which introduces a degree of centralization during the stamping and upgrading window. Crucially, however, this dependency is limited to **service availability (liveness), not cryptographic trust**: calendar servers cannot forge or backdate a timestamp, and once a receipt is upgraded with its completed Merkle path (`.ots`, typically under 1 KB), the calendar servers drop out of the verification equation entirely. Even if every calendar server went offline permanently tomorrow, all existing upgraded proofs would remain verifiable forever against the blockchain headers alone.
 
 ### Is anteriority alone enough? Why not just put your name in the text?
 
-A practical question immediately arises: *If I embed my name and website directly into the document metadata (e.g. `author: Giovanni Filardo`) and anchor the raw file's SHA-256 into Bitcoin, doesn't that prove both existence and authorship? If a plagiarist steals my content, they can never produce an earlier Bitcoin block. Why bother with asymmetric signatures at all?*
+A practical question immediately arises: *If I embed my name and website directly into the document metadata (e.g. `author: Giovanni Filardo`) and anchor the raw payload's SHA-256 into a blockchain, doesn't that prove both existence and authorship? If a plagiarist steals my content, they can never produce an earlier block. Why bother with asymmetric signatures at all?*
 
-For **99% of real-world copyright disputes and plagiarism claims, putting your name in the text and timestamping it is completely sufficient.**
+For real-world copyright disputes and prior-art claims, **putting your name directly in the payload and timestamping it is not only sufficient—it has higher long-term value than a private key signature.**
 
 Consider what an adversary faces:
-* If an attacker downloads your document and its `.ots` receipt to claim priority, they are holding a cryptographic receipt that seals a file **which literally names you as the author**.
-* If the attacker edits the file to change your name to theirs, the SHA-256 hash changes completely, and your existing `.ots` proof immediately fails verification.
-* If the attacker creates a *new* `.ots` proof with their name on it, their Bitcoin confirmation will be mined hours, days, or years **after** yours. The blockchain mathematically proves who was first.
+* If an attacker downloads your document and its `.ots` receipt to claim priority, they are holding a cryptographic receipt that seals a payload which literally names you as the author.
+* If the attacker edits the payload to change your name to theirs, the SHA-256 hash changes completely, and your existing `.ots` proof immediately fails verification.
+* If the attacker creates a *new* `.ots` proof with their name on it, their block confirmation will be recorded hours, days, or years **after** yours. The blockchain mathematically proves who was first.
 
-In many publishing and engineering workflows, **a detached private key signature is overkill**. For articles, essays, and specifications, embedding the author name directly into the source document achieves the exact evidentiary goal of prior-art protection without requiring authors or readers to maintain cryptographic keyrings.
+Even more importantly, ask yourself: **what happens if someone steals your private key, or you lose it?** A private key is a fragile external secret. If a key is lost, rotated, or compromised, a signature adds no advantage over having the author name inside the timestamped bytes. Furthermore, embedding attribution inside the payload is completely agnostic to how the information is stored: it works identically for a Markdown file on disk, a serialized article record in a database, or an archived PDF.
+
+In most publishing and engineering workflows, a detached private key signature can be overkill. Embedding the author name directly into the source payload achieves the evidentiary goal of prior-art protection without requiring authors or readers to maintain cryptographic keyrings or depend on external code-hosting platforms.
 
 ### The two-step verification penalty
 
@@ -162,11 +163,11 @@ There is an even more compelling architectural reason to prefer embedded authors
 
 If you require a detached cryptographic signature (`SIG(doc, pk)`), verification becomes a cumbersome two-step ceremony:
 1. **Key and signature audit**: The verifier must locate your public key, establish trust in that key (often relying on third-party key servers, DNS records, or web archives that may decay over time), and run GPG or OpenSSH verification commands.
-2. **Blockchain audit**: The verifier must then run the OpenTimestamps client to verify the cryptographic path connecting the signature to a Bitcoin block.
+2. **Blockchain audit**: The verifier must then run the OpenTimestamps client to verify the cryptographic path connecting the signature to a confirmed block.
 
 In long-term digital preservation, complexity is the enemy of permanence. The more ceremony and external tooling required to verify a claim thirty years from now, the less likely anyone is to audit it.
 
-In contrast, when the author identity is embedded directly into the document's validated frontmatter and timestamped as raw bytes, verification collapses into a **single, friction-free operation**:
+In contrast, when the author identity is embedded directly into the payload and timestamped as raw bytes, verification collapses into a single, friction-free operation:
 
 ```bash
 ots verify document.md.ots -f document.md
@@ -174,67 +175,68 @@ ots verify document.md.ots -f document.md
 
 Any reader on any consumer operating system can verify the text, metadata, and author attribution in a single command, without managing keys, importing certificates, or relying on external identity directories.
 
-### What signatures actually prove (and the plausible deniability trap)
+### Claiming versus rejecting authorship: where signatures actually matter
 
-If embedding your name in an anchored document defeats plagiarism, what does the asymmetric signature (`SIG(doc, pk)`) actually accomplish?
+If embedding your name in an anchored document defeats plagiarism, when does an asymmetric signature (`SIG(doc, pk)`) actually matter?
 
-It provides **affirmative endorsement (a canonical channel)**, not a mathematical alibi:
+The answer depends on the **direction of the dispute**—whether you are *claiming* authorship or *rejecting* it—and whether you are available to confirm your own work:
 
-* **What a signature CAN prove**: It proves that a specific cryptographic key affirmatively authorized a statement. If a software patch, security advisory, or technical essay bears your valid signature, readers have mathematical certainty that it originated from the holder of that key, rather than an imposter distributing a modified payload under your name.
-* **What a signature CANNOT prove (the plausible deniability trap)**: A signature cannot prove that you *did not* write an unsigned document. If an adversary drafts a defamatory or malicious text with your name on it and anchors it to Bitcoin, pointing to the absence of your signature does not provide mathematical innocence. An accuser could always argue: *"You wrote ten uncontroversial essays with your signing key, and then authored this controversial piece without signing it specifically to preserve plausible deniability."*
+My willingness to stand behind an article suffices when someone can ask me directly. A signature earns its keep when a reader needs to verify an endorsement independently—for example, if someone publishes a fake release under my name, or if I am unavailable to confirm which version I actually endorsed.
 
-Cryptography only attests to operations performed with a key; it cannot prove a negative about what a human did without one. 
+* **Claiming authorship (prior art and anti-plagiarism)**: Suppose a plagiarist claims they wrote your article. To make that case, they must explain why the earliest anchored document on the blockchain already contains *your* name inside the hashed bytes, while no earlier timestamp exists with theirs. The timestamp is what establishes the order of the versions and preserves your byline; signing it would only add an independent way for third parties to authenticate your endorsement without asking you.
+* **Rejecting authorship (non-repudiation and binding commitments)**: Now flip the dispute. Suppose a party signs a contract, an order, or a security advisory, and later tries to disown it: *"I never agreed to that—anybody could have typed my name into a file and timestamped it."* Because anyone can type someone else's name into a plain-text document, an embedded name cannot bind someone who tries to repudiate a commitment, nor can it stop an imposter from publishing a fake advisory under your name. This is where cryptographic signatures are genuinely valuable: proving affirmative endorsement so a signer cannot credibly claim *"anybody could have done it."*
+* **What a signature still cannot prove (the plausible deniability trap)**: Even with a signing key, the *absence* of your signature on an anonymous or defamatory document does not prove you didn't write it. An accuser can always argue: *"You signed your official releases, and then authored this unsigned piece specifically to preserve plausible deniability."*
 
-In the direct blockchain model, your on-chain wallet signature binds the transaction natively, but at the cost of gas fees, hot-wallet exposure, and financial surveillance. In OpenTimestamps, the calendar operator signs the Bitcoin transaction to keep the service free and private. An off-chain signature (via your SSH key or a signed Git commit) restores that missing affirmative endorsement, establishing an authentic, verifiable publication channel for your official work.
+Cryptography only attests to operations performed with a key; it cannot prove a negative about what a human did without one.
 
-| Dimension | Proof of Anteriority (Bitcoin / OTS) | Asymmetric Signature (SSH / GPG) |
+In the direct blockchain model, your on-chain wallet signature binds the transaction natively, but at the cost of gas fees and wallet-signing friction. In OpenTimestamps, the calendar operator signs the on-chain transaction to keep the service free and private. An optional off-chain signature is only needed when you require non-repudiation or an authenticated release channel—whereas for claiming authorship and priority, the author name embedded directly inside the timestamped bytes is the primary, enduring proof.
+
+| Dimension | Embedded Name + Timestamp (OTS) | Asymmetric Signature (SSH / GPG) |
 | :--- | :--- | :--- |
-| **Primary Guarantee** | **Chronological precedence**: Proves a specific document existed before block N. | **Affirmative endorsement**: Proves a specific key authorized these exact bytes. |
-| **Defends Against** | **Plagiarism & prior-art theft**: An adversary who copies your work cannot forge an earlier Bitcoin block. | **Spoofed official releases**: An adversary cannot counterfeit your key's explicit endorsement. |
-| **Inherent Limitation** | Does not identify who originally authored or submitted the payload. | Cannot mathematically prove you didn't author an unsigned, anonymous document. |
+| **Dispute Direction** | **Claiming authorship**: You want to prove the work is yours and you were first. | **Rejecting authorship (Non-repudiation)**: Holding a signer to a commitment they want to disown, or authenticating an official channel. |
+| **Why It Works** | A plagiarist cannot explain why your name is sealed in the earliest confirmed block with no prior record under their name. | Nobody without the private key can produce the signature, defeating the *"anybody could have typed my name"* excuse. |
+| **Inherent Limitation** | Anyone can type someone else's name into a new file, so a plain-text name cannot force non-repudiation. | Keys can be lost or stolen, and the absence of a signature cannot prove you didn't write an unsigned document. |
 
 ### The temporal protection of key compromise
 
 A common anxiety with private keys is: *What happens if my key is stolen? Does an attacker gain the ability to forge all my past writings?*
 
-This highlights one of the most remarkable properties of combining asymmetric signatures with Proof-of-Work timestamps: **past timestamps remain immune to future key compromise.**
+First, when you rely on your author attribution embedded directly inside the timestamped document rather than a private key, there is no key to steal. Your historical proofs cannot be compromised by a credential leak because they depend solely on SHA-256 and blockchain consensus.
 
-If an attacker compromises your machine and steals your private key today, they can produce signatures from today onward. But they **cannot backdate their theft**. To forge your historical articles, the attacker would have to insert their new signature into Bitcoin blocks mined months or years in the past—which is mathematically impossible under Proof-of-Work consensus. The blockchain timestamp acts as a strict cryptographic cutoff date.
-
-For software developers, as we will explore in Part 2, you do not even need complex detached signature envelopes: **Git itself bridges this gap**. Signing your Git commits (`git commit -S`) binds your SSH or GPG key and document tree into an authenticated commit object before OpenTimestamps anchors it.
+Second, even in workflows that do combine asymmetric signatures with blockchain timestamps (such as signed software binaries), past timestamps remain immune to future key compromise. If an attacker compromises a machine and steals a signing key today, they can produce signatures from today onward, but they cannot backdate their theft. To forge historical records, the attacker would have to insert their new hash into blocks confirmed months or years in the past—which is computationally infeasible once settled under network consensus. The blockchain timestamp acts as a strict cryptographic cutoff date.
 
 ---
 
 ## The 30-year ledger longevity test
 
-A timestamp is only as dependable as the network that preserves it. If you need to verify a document thirty years from now, the verification process must not depend on fragile token economics, pruning nodes, or centralized storage services.
+Up to this point, the decoupled Merkle-aggregation architecture is ledger-agnostic: in principle, a calendar server can anchor its root hash into any public blockchain. However, a timestamp is only as dependable as the network that preserves it. If you need to verify a document thirty years from now, the verification process must not depend on fragile token economics, pruning nodes, or centralized storage services.
 
 When evaluated against multi-decade permanence, most decentralized architectures fall short:
 
 | Network / Approach | Consensus / Storage Model | Longevity Risk |
 | :--- | :--- | :--- |
-| **Kaspa (KAS)** | High-throughput GHOSTDAG / blockDAG | Standard Kaspa nodes prune historical block data aggressively to maintain high block rates. Historical proofs become unverifiable to ordinary users unless they locate and query rare, dedicated archival nodes. |
+| **Kaspa (KAS)** | High-throughput GHOSTDAG / blockDAG | Standard Kaspa nodes prune historical block data aggressively to maintain high block rates. Historical proofs become unverifiable to ordinary users unless they locate and query rare, dedicated archival nodes. Proposal KIP6 aims to address this problem. |
 | **Ravencoin (RVN)** | Native asset layer (32-byte metadata payload) | While RVN natively supports attaching arbitrary metadata to tokens, its long-term economic security and hash-rate viability present severe risks of 51% reorganizations or chain abandonment. |
 | **Ethereum / EVM** | Smart contract storage (`SSTORE`) | Ethereum storage incurs high L1 gas fees. Layer-2 rollups introduce centralized sequencers, contract upgradeability keys, and multi-signature bridge assumptions that complicate multi-decade verification. |
 | **Solana** | High-speed monolithic consensus | Extreme state generation forces validators to purge transaction history, offloading raw blocks to external cloud storage (BigQuery) or decentralized bridges. It cannot support lightweight, self-contained offline verification. |
 | **IPFS / Filecoin** | Decentralized content addressing | IPFS is an addressable storage protocol, not an immutable clock. To keep content accessible, you must continuously pay monthly fees to pinning services or run an always-on daemon. If pinning lapses, the content disappears. |
 | **Bitcoin (via OpenTimestamps)** | Proof-of-Work Nakamoto Consensus | The most secure, energy-dense, and conservative computational network on Earth. By embedding only the 32-byte Merkle root into an `OP_RETURN`, it leverages Bitcoin's multi-decade immutability with zero state bloat. |
 
-Bitcoin is the only public ledger with nearly two decades of continuous, unbroken Proof-of-Work history. Crucially, an upgraded OpenTimestamps proof requires only the 80-byte Bitcoin block headers to verify the Merkle path. 
+Bitcoin is the only public ledger with nearly two decades of continuous, unbroken Proof-of-Work history. Its block header timestamps are strictly bounded by consensus rules (each block's timestamp must exceed the median time of the previous 11 blocks and cannot exceed network-adjusted time by more than two hours), and an upgraded OpenTimestamps proof requires only the 80-byte Bitcoin block headers to verify the Merkle path. 
 
 To verify a document thirty years from now, a future reader needs to retain only three artifacts:
-1. **The original bytes**: The unedited document file (e.g. preserved in a Git repository or local archive).
-2. **The detached proof (`.ots`)**: The cryptographic receipt containing the Merkle path connecting your document's digest to the Bitcoin block header.
-3. **A trusted view of Bitcoin block headers**: The entire set of Bitcoin headers since the genesis block occupies less than 70 MB. A verifier can check the proof completely offline on a standard laptop without querying third-party APIs or running a multi-hundred-gigabyte archival node.
+1. **The original bytes**: The unedited payload (whether preserved as a file, a serialized database record, or a local archive).
+2. **The detached proof (`.ots`)**: The cryptographic receipt containing the Merkle path connecting your payload's digest to the Bitcoin block header.
+3. **A trusted view of Bitcoin block headers**: At 80 bytes per header across roughly 975,000 blocks, the entire chain of Bitcoin headers since the genesis block occupies approximately 78 MB. A verifier can check the proof completely offline on a standard laptop without querying third-party APIs or running a multi-hundred-gigabyte archival node.
 
 ### The quantum horizon: why hash-only timestamps endure
 
-When evaluating multi-decade permanence, engineering leaders must also consider the arrival of cryptographically relevant quantum computers.
+Evaluating multi-decade permanence also requires accounting for cryptographically relevant quantum computers.
 
 In quantum computing theory, cryptographic primitives face two very different threat profiles:
 
 * **Asymmetric cryptography (public keys)**: Algorithms based on prime factorization or discrete logarithms—such as RSA, ECDSA, and Ed25519—are fundamentally vulnerable to Shor's algorithm. When large-scale quantum computers emerge, public-key digital signatures can theoretically be forged.
-* **Symmetric cryptography (hash functions)**: Cryptographic hash functions like SHA-256 are subject only to Grover's algorithm, which provides a quadratic speedup for brute-force search. Against SHA-256, this merely reduces effective security from 256 bits to 128 bits. In practical terms, $2^{128}$ operations remains physically impossible to brute-force under known physics, requiring more energy than the lifetime output of multiple stars.
+* **Cryptographic hash functions**: Unkeyed hash functions like SHA-256 are subject only to Grover's algorithm, which provides a quadratic speedup for brute-force search. Against SHA-256, this merely reduces effective preimage security from 256 bits to 128 bits. In practical terms, $2^{128}$ operations remains physically impossible to brute-force under known physics, requiring more energy than the lifetime output of multiple stars.
 
 This distinction provides a decisive architectural advantage for OpenTimestamps: **an OpenTimestamps proof is built entirely on hash functions.**
 
@@ -242,16 +244,16 @@ There are no elliptic curves, no RSA keys, and no public-key signatures inside t
 
 Even if quantum computers break wallet private keys in twenty years, they cannot retroactively rewrite historical OpenTimestamps records. To forge an earlier timestamp, an attacker would have to compute a SHA-256 collision or preimage—a task that remains quantum-resistant.
 
-This also reinforces the architectural elegance of embedding the author's identity directly into the document's text (such as in frontmatter) rather than relying on detached digital signatures: both the content and the author claim are sealed into a single, 100% hash-based artifact that naturally inherits post-quantum permanence.
+This also reinforces the architectural elegance of embedding the author's identity directly into the payload's text (whether in file frontmatter or a database record) rather than relying on detached digital signatures: both the content and the author attribution are sealed into a single, **100% hash-based artifact that naturally inherits post-quantum permanence**.
 
 ---
 
 ## Universal principles in practice
 
-The combination of digital signatures, Merkle aggregation, and Proof-of-Work anchoring provides a universal framework for proving digital priority:
+The combination of embedded attribution, Merkle aggregation, and Proof-of-Work anchoring provides a universal, storage-agnostic framework for proving digital priority:
 
 ```text
-Provable Record = Author Signature ──(binds to)──> Document Hash ──(anchored in)──> Bitcoin Block
+Provable Record = Payload + Embedded Author ──(SHA-256)──> Merkle Root ──(anchored in)──> Bitcoin Block
 ```
 
 This framework applies universally across domains:

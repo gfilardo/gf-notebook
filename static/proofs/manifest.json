@@ -61,6 +61,18 @@
           "gitCommit": "91c97baa619fa4987b879a2e14d0965a67b9d9e6",
           "bitcoinBlock": 975458,
           "bitcoinBlockTime": null
+        },
+        {
+          "version": 3,
+          "path": "content/posts/decentr-timestamps-implement-pipelines-and-verify.md",
+          "fileHash": "5f72f83ae8bae690f6123c31a13180195147fd41edebafe9d1b58f8fda1cc171",
+          "proofFile": "static/proofs/decentralized-timestamps-pt2/v3.ots",
+          "otsUrl": "/proofs/decentralized-timestamps-pt2/v3.ots",
+          "stampedAt": "2026-11-19T13:38:01.832Z",
+          "status": "pending",
+          "gitCommit": "91c97baa619fa4987b879a2e14d0965a67b9d9e6",
+          "bitcoinBlock": null,
+          "bitcoinBlockTime": null
         }
       ]
     },
@@ -77,6 +89,18 @@
           "status": "anchored",
           "gitCommit": "0d2100d2b8a2e80451d52c07c89e47289f687663",
           "bitcoinBlock": 975431,
+          "bitcoinBlockTime": null
+        },
+        {
+          "version": 2,
+          "path": "content/posts/decentr-timestamps-proving-existence-and-authorship.md",
+          "fileHash": "8c6cd99ddc74371aba180a90a0c9d2351c8400a455be7b31c7df70f75fde0015",
+          "proofFile": "static/proofs/decentralized-timestamps-pt1/v2.ots",
+          "otsUrl": "/proofs/decentralized-timestamps-pt1/v2.ots",
+          "stampedAt": "2026-11-19T13:38:02.878Z",
+          "status": "pending",
+          "gitCommit": "91c97baa619fa4987b879a2e14d0965a67b9d9e6",
+          "bitcoinBlock": null,
           "bitcoinBlockTime": null
         }
       ]
