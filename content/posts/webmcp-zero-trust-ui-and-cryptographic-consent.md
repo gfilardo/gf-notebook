@@ -1,10 +1,10 @@
 ---
 id: webmcp-zero-trust-ui-and-cryptographic-consent
-title: "WebMCP: The Zero-Trust UI: Binding Agent Reality to Cryptographic Consent"
+title: "WebMCP: The Zero-Trust UI"
 author: "Giovanni Filardo"
 slug: webmcp-zero-trust-ui-and-cryptographic-consent
 date: "2026-11-02"
-description: "Why platforms must treat DOM frontends as untrusted client environments, establishing clear liability lines and anchoring high-stakes actions in WebAuthn hardware consent."
+description: "Why platforms must treat DOM frontends as untrusted client environments, define clear responsibility boundaries, and anchor high-risk actions in WebAuthn transaction signing."
 tags:
   - WebMCP
   - AI
@@ -19,24 +19,24 @@ draft: true
 unlisted: true
 ---
 
-> In an agentic web, frontend interfaces can no longer be assumed to reflect human agency. Autonomous browser agents, vision-language models, and headless automation drivers manipulate the Document Object Model in ways that are indistinguishable from human browsing on the transport layer alone. Relying on heuristic origin checks creates fatal governance and liability vulnerabilities. To build robust architectures, platforms must adopt a **zero-trust UI model**: treat DOM interactions as untrusted client execution, establish an explicit liability divide through declared WebMCP tools, and anchor consequential commitments to hardware-backed, non-delegable cryptographic consent.
+> In an agentic web, frontend interfaces can no longer be assumed to reflect human agency. Autonomous browser agents, vision-language models, and headless automation drivers manipulate the Document Object Model in ways that are indistinguishable from human browsing on the transport layer alone. Relying on heuristic origin checks leaves applications exposed to unverified execution. To build sound architectures, platforms must adopt a **zero-trust UI model**: treat DOM interactions as untrusted client execution, establish clear responsibility boundaries through declared WebMCP tools, and anchor high-risk commitments in hardware-backed **transaction signing with dynamic linking**.
 
-The earlier articles in this series addressed how to expose browser-based tools safely: recognizing [people and agents as two distinct audiences](/posts/webmcp-people-and-agents/), eliminating unintentional dark patterns when bypassing user interfaces, reasoning about delegated authority, and structuring idempotent, agent-ready transactions. 
+The earlier articles in this series addressed how to expose browser-based tools safely: recognizing [people and agents as two distinct audiences](/posts/webmcp-people-and-agents/), eliminating [unintentional dark patterns](/posts/webmcp-agent-shortcuts-and-unintentional-dark-patterns/) when programmatic shortcuts skip visual disclosures, structuring idempotent two-phase transactions (Part 3), and scaling confirmation across a two-axis risk framework (Part 4).
 
 Each of those designs rested on a critical premise: that agents interact with web applications through registered programmatic tools.
 
-Yet in production, a stubborn reality intervenes. When an agent cannot find a declared tool—or encounters a reasoning failure, a hallucinated workflow, or an incomplete schema—it does not simply halt. It falls back to direct DOM automation: filling out input fields, clicking submit buttons, navigating checkout paths, and simulating user gestures. 
+Yet in production, a stubborn reality intervenes. When an agent cannot find a declared tool—or encounters a reasoning failure, a rejected tool call, or an incomplete schema—it does not simply halt. It falls back to direct DOM automation: filling out input fields, clicking confirmation buttons, navigating checkout paths, and simulating user gestures.
 
-For backend services, this shatters the traditional security boundary. When an HTTP request arrives carrying a valid session cookie, how can the server know whether an action represents conscious human intent or synthetic agent autonomy?
+For backend services, this shatters the traditional security boundary. In Part 3, when a ride surged to €85, the backend required the user to click **Accept this fare** in the page before committing. When an HTTP request arrives carrying a valid session cookie, how can the server know whether a human clicked that button—or an autonomous agent clicked the CSS selector itself?
 
 ---
 
 ## 1. The breakdown of implicit UI boundaries
 
-The rapid adoption of agentic web standards like WebMCP introduces a structural dichotomy in web interaction:
+The adoption of agentic web standards like WebMCP introduces two parallel arrival paths into the same backend:
 
-1. **Explicit programmatic interfaces** exposed specifically for agent discovery and execution (WebMCP tools registered via `navigator.modelContext.registerTool()`).
-2. **Traditional Document Object Model (DOM) frontends** designed for direct human perception, visual hierarchy, and manual manipulation.
+1. **Declared WebMCP tools** exposed specifically for agent discovery and structured execution via `document.modelContext.registerTool()` *(note: early specification drafts and prototypes exposed this under `navigator.modelContext` before the W3C draft standardized on `Document`)*.
+2. **Traditional Document Object Model (DOM) frontends** designed for human visual perception and manual interaction, but equally accessible to DOM-scripting agents.
 
 ```mermaid#wide The breakdown of implicit UI boundaries: two parallel paths into the backend.
 flowchart TD
@@ -66,206 +66,256 @@ This creates a fundamental governance dilemma:
 
 ---
 
-## 2. The liability divide: declared tools vs. direct UI automation
+## 2. Division of responsibility: declared tools vs. direct UI automation
 
-The absence of targeted legislation for autonomous agent operations leaves liability attribution uncertain under general contract and negligence doctrines. When an agent misinterprets a prompt and purchases the wrong airline ticket, who bears the loss? The user? The agent vendor? Or the platform that processed the request?
+When an autonomous agent misinterprets a prompt or scripts a page into purchasing an unintended €85 fare, where does architectural responsibility lie? While statutory and contractual liability for autonomous agents remains an open question for courts and regulators, systems architects must draw clear operational boundaries between what the server can verify and what it cannot control.
 
-By formalizing explicit agent interfaces, platform operators establish clear boundaries:
+By publishing explicit WebMCP tools, a platform establishes a clear demarcation between two arrival paths:
 
 ::: wide
 
-| Dimension | Declared Tooling (WebMCP) | Direct UI Automation |
+| Dimension | Declared Tooling (WebMCP) | Direct UI Automation (DOM Scripting) |
 | :--- | :--- | :--- |
-| **Interface Type** | Structured JSON-RPC / WebMCP endpoints | Arbitrary DOM event simulation |
-| **Semantic Clarity** | Explicit schemas, parameter typing, and tool scopes | Implicit page state, CSS selector dependency |
-| **Contractual Status** | Mutual protocol agreement | Unilateral script injection / scraping |
-| **Error & Fault Attribution** | Schema validation failures, deterministic errors | Breakages caused by layout shifts or race conditions |
-| **Liability Presumption** | Platform assumes responsibility for tool specification validity; agent operator assumes execution responsibility | Agent developer/operator assumes sole liability for unintended actions |
+| **Interface Type** | Structured WebMCP tool contracts (`document.modelContext`) | Arbitrary DOM event simulation & screen scraping |
+| **Semantic Clarity** | Explicit JSON schemas, typed parameters, and annotations | Implicit visual state and brittle CSS selector dependencies |
+| **Operational Contract** | Published programmatic interface supported by the site | Unilateral client-side scripting outside declared APIs |
+| **Failure Attribution** | Schema validation errors and deterministic domain outcomes | Silent breakages caused by layout shifts or race conditions |
+| **Architectural Responsibility** | Site is responsible for tool schema validity, contract semantics, and confirmation checks | Agent operator assumes operational risk for bypassing declared tools to drive the raw DOM |
 
 :::
 
-Exposing explicit WebMCP endpoints functions as both a technical boundary and a terms-of-service demarcation line:
+Exposing explicit WebMCP endpoints defines an enforceable system boundary:
 
-- **Inside declared tooling**: The platform guarantees interface stability, semantic contracts, and clear input validations. If the platform’s tool returns a faulty quote, the platform shares responsibility for the defective data.
-- **Outside declared tooling**: When an agent deviates from declared interfaces to automate the UI directly, it forfeits the guarantees provided by platform API stability. The agent operator assumes sole liability for corrupted state, unintended transactions, or broken execution flows caused by dynamic UI changes.
-
-To enforce this boundary technically rather than merely contractually, backend architectures require a verifiable execution model.
+- **Via declared WebMCP tools:** When a site publishes a tool, the site assumes responsibility for validating inputs, enforcing the offer-and-approval contract, and returning accurate material conditions.
+- **Via direct DOM automation:** When an agent bypasses declared tools to synthesize clicks on raw HTML elements, it steps outside the application's programmatic contract. The server cannot control how an external agent parses visual markup—which means the server can no longer rely on an in-page DOM click alone as proof that a human approved a high-risk action.
 
 ---
 
-## 3. The two-tier execution model: preference envelopes vs. hardware consent
+## 3. From standing thresholds to transaction signing
 
-To reconcile autonomous efficiency with transaction safety, backend systems cannot force human confirmation on every single step. If every reading query or minor state change prompts the user, autonomy dies of prompt fatigue. Conversely, allowing an agent unrestricted write access invites catastrophic mistakes.
+In Part 4, we mapped confirmation mechanisms across a two-axis quadrant. When we account for agents that can automate the DOM directly, the transition from low-risk autonomy to high-risk confirmation sharpens into a two-tier backend enforcement model:
 
-The solution is a **two-tier execution model**:
-
-```mermaid#wide Two-tier execution architecture: preference envelopes vs. hardware-bound consent.
+```mermaid#wide Two-tier enforcement: standing threshold envelope vs. WebAuthn transaction signing with dynamic linking.
 flowchart TD
-    REQ["Agent Action Request"] --> GATE["Backend Policy Gatekeeper"]
-    GATE -->|"Within preference envelope"| AUTO["Auto-Commit Execution<br/>(Tier 1: Autonomous)"]
-    GATE -->|"Exceeds threshold / sensitive"| CHAL["Issue Cryptographic Challenge<br/>(Non-replayable nonce + payload hash)"]
-    CHAL --> AUTH["Browser OS Authenticator Gate<br/>(WebAuthn / FIDO2)"]
-    AUTH --> HW["Hardware Touch / User Presence<br/>(Biometric / Secure Enclave / Security Key)"]
-    HW --> SIG["Signed Assertion to Backend<br/>(ClientDataHash + authenticator signature)"]
-    SIG --> VERIF["Verified Execution<br/>(Tier 2: Hardware Consent)"]
+    REQ["Booking Request (WebMCP Tool or DOM Route)"] --> GATE["Backend Risk & Policy Gatekeeper"]
+    GATE -->|"Within standing threshold (e.g. ≤ EUR 40)"| AUTO["Auto-Commit Execution<br/>(Quadrant 1: Standing Threshold)"]
+    GATE -->|"Exceeds threshold / novel / irreversible (e.g. EUR 85)"| CHAL["Issue Single-Use Challenge<br/>(Nonce + canonical offer hash)"]
+    CHAL --> AUTH["Browser OS Authenticator Gate<br/>(WebAuthn / navigator.credentials.get)"]
+    AUTH --> HW["Physical User Presence & Verification<br/>(Touch ID / Face ID / Windows Hello / Security Key)"]
+    HW --> SIG["Hardware-Signed Assertion to Backend<br/>(authenticatorData + signature over clientDataJSON)"]
+    SIG --> VERIF["Verify Signature & Consume Challenge Once<br/>(Quadrant 4: Transaction Signing)"]
 ```
 
-### Tier 1: The autonomous preference envelope
-* Governs low-risk, deterministic actions (e.g., read queries, inventory filtering, non-destructive mutations, micro-purchases under predefined budget limits).
-* Executed directly via WebMCP tools under scoped session tokens.
-* No human disruption required; policy constraints are evaluated automatically by backend authorization engines against stored user preferences.
+### Tier 1: The standing threshold envelope
+* Governs low-risk, reversible routine actions (such as a regular daily commute within the user's chosen €40 rule).
+* The backend policy engine evaluates the offer against the user's stored account threshold and approves it without interrupting the user.
 
-### Tier 2: Cryptographic step-up consent
-* Governs critical mutations (e.g., fund transfers, personal data exports, contractual sign-offs, actions exceeding preference thresholds).
-* The backend refuses autonomous execution by issuing a non-replayable, cryptographically bound challenge.
-* Automation cannot satisfy the challenge via DOM interaction because signing capabilities reside strictly outside the browser execution environment.
+### Tier 2: Transaction signing with dynamic linking (not step-up)
+* Governs high-risk mutations: fares exceeding the €40 threshold (like our €85 surge quote), novel counterparties, identity or credential edits, and irreversible commitments.
+* In Part 3, we gated the €85 quote behind **Quadrant 2 (Draft and confirm)**—an in-page UI confirmation button. In a zero-trust UI, however, an agent that falls back to DOM automation can click an HTML button just as easily as a person can.
+* To close that gap, the backend escalates to **Quadrant 4 (Transaction signing)**: it refuses execution until it receives a single-use cryptographic signature produced by a hardware authenticator and **dynamically linked** to the exact terms of the €85 offer.
+
+As we established in Part 4, this mechanism is **transaction signing, not step-up authentication**. Step-up authentication raises the session to a higher privilege level for some period of time—leaving an elevated session in the hands of the in-browser agent. Transaction signing confirms one specific offer and ends there, leaving session privileges untouched.
 
 ---
 
-## 4. Hardware-bound verification: WebAuthn as the non-delegable anchor
+## 4. Hardware-bound verification: WebAuthn and dynamic linking
 
-Web Authentication ([WebAuthn / FIDO2](https://www.w3.org/TR/webauthn-2/)) provides the technological foundation for enforcing human-in-the-loop consent in an agent-dominated web. 
+Web Authentication ([WebAuthn Level 3](https://www.w3.org/TR/webauthn-3/)) provides the browser-native foundation for bringing banking-style transaction signing into an agent-operated page.
 
-WebAuthn was originally designed to replace passwords with asymmetric public-key cryptography. In an agentic architecture, it serves a deeper purpose: **non-delegable proof of physical human presence and explicit intent**.
-
-### Architectural workflow
-
-```mermaid#wide Detailed WebAuthn cryptographic step-up sequence.
+```mermaid#wide WebAuthn transaction signing sequence with dynamic linking to the canonical offer hash.
 sequenceDiagram
     autonumber
     participant A as Agent (WebMCP / DOM)
-    participant B as Backend Service
+    participant B as Node Backend
     participant C as Browser Client
     participant H as Hardware Authenticator (OS / FIDO2)
 
-    A->>B: Commit Sensitive Action (payload)
-    Note over B: Action exceeds Tier 1 envelope
-    B-->>A: 403 Step-Up Required (challenge, payloadHash)
-    A->>C: Request Human Confirmation (display terms)
-    C->>H: navigator.credentials.get({ challenge, ... })
-    Note over H: Prompts for Touch / Face ID / PIN<br/>(Physical User Presence & Verification)
-    H-->>C: Signed Assertion (authenticatorData + signature)
-    C->>B: Submit Action + WebAuthn Assertion
-    Note over B: Verify signature over ClientDataHash<br/>Confirm User Presence flag (UP=1)
-    B-->>C: 200 OK (Verified Execution)
+    A->>B: Attempt to book EUR 85 offer (offerId)
+    Note over B: Exceeds EUR 40 standing threshold
+    B-->>A: 403 Transaction Signature Required (challenge, offerHash)
+    A->>C: Surface human confirmation view (display EUR 85 terms)
+    C->>H: navigator.credentials.get({ publicKey: { challenge, ... } })
+    Note over H: Requires Touch ID / Face ID / Windows Hello<br/>(Physical User Presence UP=1 & Verification UV=1)
+    H-->>C: Signed Assertion (authenticatorData, clientDataJSON, signature)
+    C->>B: Submit booking + WebAuthn assertion
+    Note over B: Verify signature over authenticatorData || SHA-256(clientDataJSON)<br/>Verify challenge matches session + offerHash & consume once
+    B-->>C: 200 OK (Booking Committed)
 ```
 
-1. **Transaction Challenge Generation:**  
-   The backend generates an authentication challenge cryptographically tied to the exact transaction payload:
-   
-   $$\text{ClientDataHash} = H(\text{challenge} \parallel \text{origin} \parallel H(\text{TransactionPayload}))$$
-   
+### How the cryptographic binding works
+
+1. **Canonical Offer Hashing & Single-Use Challenge Generation:**  
+   When an operation exceeds the standing threshold, the backend serializes the authoritative offer into a deterministic canonical JSON byte string ([RFC 8785](https://datatracker.ietf.org/doc/html/rfc8785))—never by coarsely converting an in-memory object to a string—and binds it to a fresh cryptographic server nonce:
+
    ```text
-   ClientDataHash = SHA-256(challenge || origin || SHA-256(TransactionPayload))
+   offerHash = SHA-256(canonicalize(offer))
+   challenge = SHA-256(serverNonce || ":" || offerHash)
    ```
 
+   The backend stores this `challenge` server-side, bound to the user's session, the `offerId`, and a short expiration window.
+
 2. **OS/Hardware Boundary Isolation:**  
-   The browser calls `navigator.credentials.get()`. Crucially, the browser JavaScript runtime does not perform the cryptographic signing itself; it delegates execution to the underlying operating system authenticator or external hardware token (such as Apple Secure Enclave, Windows Hello, Android Keystore, or a YubiKey).
+   The page invokes WebAuthn (`navigator.credentials.get()`). The browser JavaScript runtime cannot perform the signing operation itself; it hands the request across the process boundary to the operating system authenticator or hardware security key (Apple Secure Enclave, Windows Hello, Android Keystore, or a FIDO2 key).
 
-3. **Physical User Presence (UP) & Verification (UV):**  
-   The authenticator requires physical user engagement—capacitive touch, biometric match (fingerprint or facial scan), or a local hardware PIN. This capability cannot be triggered through DOM synthetic events, JavaScript dispatch scripts, headless DevTools protocols, or operating system accessibility mocks.
+3. **Physical User Presence (`UP`) and User Verification (`UV`):**  
+   The authenticator halts until a person provides a physical gesture or biometric check (Touch ID, Face ID, Windows Hello, or hardware touch). Synthetic DOM `click()` events, headless browser drivers, and JavaScript injection cannot satisfy or dismiss this hardware prompt.
 
-4. **Cryptographic Assertion:**  
-   The authenticator signs the challenge and transaction hash using a scoped, origin-bound private key. The assertion signature and authenticator data (containing the verified `UP` and `UV` bit flags) are transmitted back to the backend.
+4. **The Authentic WebAuthn Signing Formula:**  
+   The browser packages the server's `challenge` and the page's `origin` into `clientDataJSON`. Inside the secure element, the authenticator signs over the concatenation of `authenticatorData` (which contains the Relying Party ID hash and the verified `UP` and `UV` bit flags) and the SHA-256 digest of `clientDataJSON`:
 
-5. **Deterministic Backend Verification:**  
-   The server validates the signature against the user's registered public key, confirming:
-   - The user was physically present (`UP = 1`).
-   - The user explicitly authorized the specific payload (hash match).
-   - The execution path bypassed agent synthesis.
+   ```text
+   signature = Sign_sk(authenticatorData || SHA-256(clientDataJSON))
+   ```
 
-> [!IMPORTANT]
-> Because the private key never leaves the hardware security module and requires physical user interaction to activate, an autonomous agent running in the browser cannot forge, simulate, or delegate this assertion—no matter how capable its reasoning engine or DOM scraping skills become.
+5. **Single-Use Server Verification & Consumption:**  
+   The backend looks up the stored challenge for the active session, verifies that it matches the specific `offerId` and has not expired, marks the challenge consumed so it can never be replayed, and verifies the cryptographic signature against the user's registered public key.
+
+> [!NOTE]
+> **Hardware presence vs. hardware display:** Standard browser WebAuthn prompts (`navigator.credentials.get()`) identify the Relying Party (`localhost`), not the itemized transaction text (*"€85 ride home"*), which requires dedicated banking hardware or the emerging W3C Secure Payment Confirmation (SPC) extension. Even so, WebAuthn provides two decisive guarantees: the user reads the human-readable offer in the page while the hardware biometric prompt forces an **unbypassable physical interrupt**, and the resulting signature is **dynamically linked on the server** to the exact canonical hash of that offer.
 
 ---
 
-## 5. Implementation architecture: zero-trust web enforcement
+## 5. A WebAuthn example that runs locally
 
-Enforcing this paradigm requires a coordinated stack across manifests, client APIs, and backend verification filters.
+Every architectural pattern in this series is backed by runnable code in the [companion repository](https://github.com/gfilardo/gf-notebook-examples). To make Pattern 4 (Transaction signing) concrete, the repository includes a self-contained WebAuthn ride-booking example that anyone can download and run on their own machine.
 
-### Policy manifest (`policy-manifest.json`)
+### Design constraints
 
-Applications can publish an explicit agent boundary policy at a well-known location (e.g., `/.well-known/webmcp-policy.json`), establishing machine-readable interaction contracts:
+Like all examples in the repository, the implementation follows three strict rules to keep the architecture transparent and free of toolchain noise:
 
-```json
-{
-  "$schema": "https://specs.webmcp.org/v1/policy-manifest.json",
-  "policyVersion": "1.0.0",
-  "agentBoundaries": {
-    "allowedToolScopes": ["catalog:read", "cart:mutate", "checkout:prepare"],
-    "prohibitedUIRoutes": ["/checkout/finalize", "/account/security"],
-    "enforcement": "strict_tooling_only"
-  },
-  "stepUpPolicy": {
-    "thresholdCurrency": "USD",
-    "thresholdLimit": 50.00,
-    "authMethod": "webauthn_uv_preferred"
-  }
+- **Node.js backend, no Python:** Written entirely in plain JavaScript `.mjs` modules with no TypeScript transpilation or build step.
+- **No CDN and no bundler:** The browser loads native ES modules served directly by the local Node server.
+- **Standard libraries for WebAuthn:** Uses [`@simplewebauthn/server`](https://simplewebauthn.dev/) on the backend to generate options and verify cryptographic signatures, and [`@simplewebauthn/browser`](https://simplewebauthn.dev/) in the page for passkey registration and confirmation. Both packages are written in TypeScript but published to npm as compiled ES modules.
+
+### Serving the frontend without a CDN or bundler
+
+To avoid external CDNs and frontend bundlers, the Node HTTP server mounts `@simplewebauthn/browser`'s compiled ES module directory (`node_modules/@simplewebauthn/browser/dist/esm/`) under a local static path (`/vendor/simplewebauthn/`). The HTML page maps the package name using a standard `<script type="importmap">`, allowing client-side `.mjs` scripts to import `startRegistration` and `startAuthentication` directly.
+
+Browsers treat `http://localhost` as a secure context, so WebAuthn runs locally over plain HTTP without self-signed TLS certificates. One detail is essential: the WebAuthn Relying Party ID (`rpID`) must be `"localhost"`. Opening the server via `127.0.0.1` will fail because the WebAuthn specification forbids IP addresses as RP IDs.
+
+### The two-step flow
+
+1. **Registration:** On the registration view, the browser prompts the user to create a passkey (`startRegistration()`). The device generates an asymmetric key pair inside its secure authenticator; the public key and credential ID are sent to the Node backend and stored with the user record. The private key never leaves the device.
+2. **Confirmation (Transaction signing):** When the agent attempts to book an €85 ride—exceeding the user's €40 standing threshold stored on the backend—the server generates a single-use challenge bound to the canonical hash of the offer and the active session. The browser prompts for a signature (`startAuthentication()`), the user touches the sensor or uses face recognition, and the backend verifies the signature against the stored public key before committing the ride.
+
+*(Notice that the €40 standing threshold lives in one place—the user's backend policy store—rather than being duplicated across client manifests and server code.)*
+
+### Key server-side pseudocode
+
+The two excerpts below illustrate the core challenge generation and verification logic in the Node backend (simplified as pseudocode; see the [companion repository](https://github.com/gfilardo/gf-notebook-examples) for the complete runnable `.mjs` implementation).
+
+First, canonical offer hashing and single-use challenge creation when a booking exceeds the €40 standing threshold:
+
+```javascript
+// Pseudocode excerpt 1: Canonical offer hash & single-use challenge bound to session
+import crypto from "node:crypto";
+import { generateAuthenticationOptions } from "@simplewebauthn/server";
+
+function canonicalizeOffer(offer) {
+  // Deterministic key-sorted JSON serialization (RFC 8785)
+  return JSON.stringify({
+    currency: offer.currency,
+    expiresAt: offer.expiresAt,
+    offerId: offer.offerId,
+    payee: offer.payee,
+    price: offer.price,
+    version: offer.version
+  });
+}
+
+async function issueTransactionChallenge({ session, user, offer }) {
+  const offerHash = crypto.createHash("sha256")
+    .update(canonicalizeOffer(offer), "utf8")
+    .digest("hex");
+
+  const nonce = crypto.randomBytes(32).toString("hex");
+  const challengeBytes = crypto.createHash("sha256")
+    .update(`${nonce}:${offerHash}`, "utf8")
+    .digest();
+
+  const options = await generateAuthenticationOptions({
+    rpID: "localhost",
+    challenge: challengeBytes,
+    allowCredentials: user.credentials.map(c => ({ id: c.id })),
+    userVerification: "preferred"
+  });
+
+  // Store single-use challenge server-side, bound to session and offerHash
+  challengeStore.set(session.id, {
+    challenge: options.challenge,
+    userId: user.id,
+    offerId: offer.offerId,
+    offerHash,
+    expiresAt: Date.now() + 120_000,
+    consumed: false
+  });
+
+  return { status: 403, error: "TRANSACTION_SIGNATURE_REQUIRED", offerHash, options };
 }
 ```
 
-### Backend gatekeeper implementation (FastAPI / Cryptographic step-up)
+Second, consuming the challenge once and verifying the hardware signature with `@simplewebauthn/server`:
 
-The server evaluates incoming requests against the preference envelope. Routine requests execute immediately; high-consequence operations enforce cryptographic step-up consent:
+```javascript
+// Pseudocode excerpt 2: Single-use challenge consumption & real WebAuthn verification
+import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 
-```python
-from fastapi import FastAPI, HTTPException, Request, Depends
-import hashlib
-import hmac
-import secrets
+async function commitBooking({ session, user, offer, assertion }) {
+  // Tier 1: Standing threshold stored in one place (backend user policy)
+  if (offer.price <= user.policy.standingThresholdEur) {
+    return executeBooking(offer, { confirmedBy: "standing_threshold" });
+  }
 
-app = FastAPI()
+  // Tier 2: Above EUR 40 threshold -> require WebAuthn transaction signature
+  if (!assertion) {
+    return issueTransactionChallenge({ session, user, offer });
+  }
 
-def verify_agent_envelope(action_payload: dict, user_limits: dict) -> bool:
-    """Evaluate Tier 1: Is the action within autonomous bounds?"""
-    amount = action_payload.get("amount", 0.0)
-    return amount <= user_limits.get("max_auto_amount", 50.0)
+  const expectedOfferHash = crypto.createHash("sha256")
+    .update(canonicalizeOffer(offer), "utf8")
+    .digest("hex");
 
-@app.post("/api/v1/orders/commit")
-async def commit_order(request: Request):
-    payload = await request.json()
-    action_data = payload.get("action")
-    user_envelope = {"max_auto_amount": 50.0}
+  const record = challengeStore.get(session.id);
+  if (
+    !record ||
+    record.consumed ||
+    record.userId !== user.id ||
+    record.offerId !== offer.offerId ||
+    record.offerHash !== expectedOfferHash ||
+    Date.now() > record.expiresAt
+  ) {
+    throw new Error("Invalid, expired, or already-consumed transaction challenge");
+  }
 
-    # Evaluate Tier 1: Preference Envelope
-    if verify_agent_envelope(action_data, user_envelope):
-        return {
-            "status": "SUCCESS", 
-            "tier": 1, 
-            "execution": "autonomous"
-        }
+  // Consume once before verification to prevent replay
+  record.consumed = true;
 
-    # Evaluate Tier 2: Enforce Cryptographic Consent
-    webauthn_assertion = payload.get("webauthn_assertion")
-    if not webauthn_assertion:
-        # Issue non-replayable challenge tied to the exact payload hash
-        challenge = secrets.token_hex(32)
-        payload_hash = hashlib.sha256(str(action_data).encode("utf-8")).hexdigest()
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": "STEP_UP_CONSENT_REQUIRED",
-                "challenge": challenge,
-                "payload_hash": payload_hash,
-                "action": "Trigger navigator.credentials.get()"
-            }
-        )
-
-    # Server-side verification of authenticator data and signature
-    # (verify_webauthn_signature validates the User Presence flag and hardware signature)
-    is_valid = True  # verify_webauthn_signature(webauthn_assertion, challenge)
-    if not is_valid:
-        raise HTTPException(
-            status_code=401, 
-            detail="INVALID_HARDWARE_ASSERTION"
-        )
-
-    return {
-        "status": "SUCCESS", 
-        "tier": 2, 
-        "execution": "hardware_verified"
+  const credential = user.credentials.find(c => c.id === assertion.id);
+  const verification = await verifyAuthenticationResponse({
+    response: assertion,
+    expectedChallenge: record.challenge,
+    expectedOrigin: "http://localhost:3000",
+    expectedRPID: "localhost",
+    credential: {
+      id: credential.id,
+      publicKey: credential.publicKey,
+      counter: credential.counter
     }
+  });
+
+  if (!verification.verified) {
+    throw new Error("Hardware signature verification failed");
+  }
+
+  credential.counter = verification.authenticationInfo.newCounter;
+  return executeBooking(offer, { confirmedBy: "webauthn_transaction_signature" });
+}
 ```
+
+### Trying it without biometric hardware
+
+You do not need Touch ID, Windows Hello, or a physical security key to run the example locally. Chrome includes a built-in **WebAuthn Virtual Authenticator** in Developer Tools (*More tools → WebAuthn → Enable virtual authenticator environment*) that emulates a hardware FIDO2 key in software. The example's `README.md` walks through setting it up in under a minute.
 
 ---
 
@@ -275,9 +325,9 @@ The future of browser security cannot rely on detecting whether a client connect
 
 Platforms must embrace a zero-trust reality:
 
-1. **Treat all UI input as potentially agent-driven.** Never assume a submitted web form represents a human decision simply because it arrived with a session cookie.
-2. **Publish explicit WebMCP tools.** Define safe, structured automation boundaries to maximize agent efficiency while establishing an unmistakable contractual and legal liability line.
-3. **Decouple routine actions using preference envelopes, while securing high-stakes operations behind hardware-backed WebAuthn gates.** Allow agents to handle routine tasks seamlessly, but insist on non-delegable physical presence whenever money, identity, or critical state is on the line.
+1. **Treat all UI input as potentially agent-driven.** Never assume a submitted web form or an in-page button click represents a human decision simply because it arrived with a session cookie.
+2. **Publish explicit WebMCP tools via `document.modelContext.registerTool()`.** Define safe, structured automation contracts to maximize agent efficiency while establishing an unmistakable operational responsibility boundary.
+3. **Separate routine autonomy from high-risk commitments using standing thresholds and WebAuthn transaction signing.** Allow agents to handle low-risk tasks seamlessly within user-chosen bounds, but require a single-use, dynamically linked hardware signature—never session-elevating step-up authentication—whenever real money, novel counterparties, identity, or irreversible state is on the line.
 
 ---
 

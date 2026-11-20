@@ -13,15 +13,20 @@ tags:
 series:
   id: webmcp-agent-ready-web
   title: "WebMCP and the agent-ready web"
-  part: 4
+  part: 3
 draft: true
 ---
 
+> Fixing the unintentional dark pattern from the previous article requires more than a frontend prompt. To answer our first core question—*“Was this specific offer approved?”*—an agent-ready transaction requires three deliberate architectural investments:
+> - **A decoupled quote service:** Versioned, short-lived offer records that lock in explicit material terms, cancellation conditions, and a strict time-to-live (TTL).
+> - **A transactional approval and idempotency store:** Single-use approval records bound to the offer version, paired with caller-scoped idempotency keys (`attemptId`) in an atomic commit state machine.
+> - **A synchronized in-page tool adapter:** Dual-surface WebMCP tool declarations (`document.modelContext.registerTool`) that share live viewmodel state with the human UI while delegating final enforcement to the backend.
+
 A useful way to explore WebMCP is to take one consequential workflow and make its assumptions explicit.
 
-For this example, the workflow is a ride booking. The user receives an €85 offer, approves it through a trusted path, and asks the application to complete the booking.
+For this example, the workflow is the ride booking from Part 2. The user receives an €85 surge offer, approves it through an application-controlled path, and asks the assistant to complete the booking.
 
-The design below is a proposed application architecture. WebMCP exposes the capabilities; the application remains responsible for offers, approval, and execution.
+The design below is a reference application architecture. WebMCP exposes the in-browser capabilities; the backend service remains authoritative for offers, approval lifecycle, and idempotent execution.
 
 ## Start with the offer
 
@@ -85,7 +90,12 @@ await document.modelContext.registerTool({
 
 The schema and the `consequentialHint` annotation make the prerequisites visible to the agent host. A required input schema cannot prove that the supplied approval is genuine or valid; the server must verify the record independently, including when a caller bypasses the tool altogether.
 
-There are two ways to carry this dependency. An explicit request passes the approval reference alongside the offer. A simpler variant passes only the offer identity and lets the server look up approval for that account and offer. That lookup variant enforces the rule, but its description and error response must still explain that fare acceptance is required. The explicit variant makes the prerequisite easier to see in the input contract. Neither variant treats a caller’s claim of acceptance as evidence.
+In practice, applications can expose two intentional, complementary tool contracts depending on how the agent interacts with the session:
+
+- **Contract A — Explicit capability binding (`book_ride({ offerId, approvalId, attemptId })`):** Shown above. Requiring `approvalId` directly in `inputSchema` makes the prerequisite self-documenting to the model and supports workflows where the agent reads the approval token from shared state or receives an explicit delegation reference.
+- **Contract B — Same-session server lookup (`book_ride({ offerId, attemptId })`):** Designed for in-page agents operating strictly within an active authenticated session. The tool accepts `offerId` and `attemptId`, and the backend queries its store for an unexpired, unconsumed approval record matching the authenticated user and that exact `offerId` version. Its tool description and structured error response (`APPROVAL_REQUIRED`) still enforce fare acceptance, while keeping the tool signature minimal.
+
+Neither contract treats a caller’s conversational claim or a boolean flag (`approved: true`) as evidence. Both resolve against the same server-side approval record.
 
 ## Keep the screen and the action in sync
 
@@ -99,29 +109,39 @@ Shared frontend state prevents one kind of drift. The backend remains authoritat
 
 ## Enforce the conditions when booking
 
-The booking service loads the authoritative offer and approval. It verifies that they match, remain valid, and cover the requested action.
+The booking service loads the authoritative offer and approval. It verifies that they match, remain within their time-to-live (TTL) window, have not already been consumed, and cover the requested action.
 
 ```mermaid Application-controlled approval is a demo assumption, not attestation of human presence.
 sequenceDiagram
     participant A as Agent via page tool
+    participant V as Shared page state
     participant UI as Application approval UI
     participant U as User
     participant S as Domain service
     A->>S: Request quote
     S-->>A: Offer, price, conditions and expiry
+    A->>V: Sync selected offer (offerId, version)
     U->>UI: Review and approve offer
     UI->>S: Record approval for this offer
-    S-->>UI: Approval reference
-    A->>S: Book with offer, approval and attempt ID
-    alt Offer and approval remain valid
-        S->>S: Verify and commit atomically
+    S-->>UI: Approval reference (approvalId)
+    UI->>V: Update shared state with approvalId
+    V-->>A: Read synchronized offerId and approvalId
+    A->>S: Book with offerId, approvalId and attemptId
+    alt Offer and approval remain valid and unconsumed
+        S->>S: Mark approval consumed and commit atomically
         S-->>A: Booking result
-    else Expired, changed or unauthorized
+    else Expired, changed, consumed or unauthorized
         S-->>A: Reject with a specific reason
     end
 ```
 
-If a material condition changes, the service rejects the attempt and returns a new offer or a requirement for renewed approval.
+Notice how the UI and the agent stay coordinated: when the user approves the €85 quote in the page, the approval component writes the returned `approvalId` into the shared frontend viewmodel (`Shared page state`). The in-page WebMCP tool reads the current `offerId` and `approvalId` from that shared state before calling the booking endpoint.
+
+On the server, each approval record follows a strict lifecycle:
+
+- **Short time-to-live (TTL):** Both the quote and its approval expire after a tight window (for example, 2 minutes), ensuring an approval granted during a brief surge cannot linger indefinitely.
+- **Single-use consumption (`approval.consumed = true`):** When the booking commits, the backend marks the approval record as consumed inside the same atomic transition. A valid `approvalId` can never be replayed to book a second ride.
+- **Version binding:** If a material condition changes or a new quote replaces the current one, the service rejects the stale reference and requires fresh approval for the new offer version.
 
 The check must hold at the point of commitment. Checking a price and then booking against independently changing state would leave a race between verification and execution. The implementation needs an atomic transition or an equivalent guarantee from the booking provider.
 
@@ -153,13 +173,17 @@ Approval consumption and booking state also need to be coordinated. With an exte
 
 An uncertain response should produce an inspectable pending state, not an invitation to start another purchase.
 
-## Give the agent useful outcomes
+## Give the agent useful outcomes and stateful cancellation
 
-The tool should distinguish between an expired offer, missing approval, changed conditions, a pending booking, and a completed booking.
+The tool should distinguish between an expired offer, missing approval, already-consumed approval, changed conditions, a pending booking, and a completed booking.
 
 These outcomes tell the agent what the application actually knows. They should also support a human-readable explanation without exposing unnecessary personal information.
 
-Cancellation needs similar care. Stopping a tool call does not necessarily reverse work already committed. The user needs a way to inspect the resulting booking and use the product’s cancellation process.
+Cancellation needs an explicit state machine of its own. Aborting an in-flight WebMCP tool call in the browser does not roll back work that has already crossed the server's commit boundary:
+
+- **Pre-commit abandonment:** If the user or agent cancels while the offer is still staged (before `book_ride` commits), the server simply revokes the unconsumed `approvalId` or lets its TTL expire.
+- **In-flight or pending reconciliation:** If an external dispatch provider times out or partially fills a request, the booking enters an explicit `PENDING_CONFIRMATION` or `CANCELLATION_REQUESTED` state rather than silently resetting—preventing the agent from assuming the booking failed and dispatching a duplicate car.
+- **Post-commit cancellation:** Once a booking is committed, stopping the agent cannot undo it. The application must expose an inspectable booking record and a dedicated cancellation operation subject to the offer's disclosed cancellation terms.
 
 ## Keep WebMCP’s role clear
 
@@ -191,6 +215,16 @@ An [accompanying working example](https://github.com/gfilardo/gf-notebook-exampl
 The repository’s README links to the example, full source and setup instructions. The implementation includes the complete WebMCP tool definitions and automated checks, so the article can keep the code brief. All bookings are fictional; no real payment or AI model is involved. Native browser-agent compatibility remains a separate manual check.
 
 The example records approval in the application, but that does not prove that a human rather than browser automation created it. Request-origin checks address a different problem, as described in [OWASP’s CSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html). A deployment that needs stronger assurance must establish a trustworthy approval mechanism as well as enforce its records.
+
+## Looking ahead: approved by whom?
+
+This two-phase architecture answers our first fundamental question: **was this specific offer approved?** By binding commitment to a versioned `offerId`, a single-use `approvalId`, and an idempotent `attemptId`, the backend eliminates the accidental shortcut from Part 2.
+
+Yet verifying that an approval record exists in the database immediately raises a second question: **approved by whom?**
+
+If a passenger had to pause and manually click **Accept this fare** for every routine €25 commute, an autonomous assistant would quickly become a chore. Conversely, for an €85 surge fare or an irreversible wire transfer, what stops an aggressive browser agent from simply scripting the DOM to click that approval button itself?
+
+In the next article, we examine **who can legitimately confirm on the user’s behalf**—and how banks scale confirmation from standing thresholds and delegated tokens up to hardware-backed transaction signing.
 
 ## References and further reading
 

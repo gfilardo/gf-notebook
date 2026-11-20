@@ -4,7 +4,7 @@ title: "WebMCP: Who can confirm on the user’s behalf?"
 author: "Giovanni Filardo"
 slug: webmcp-delegated-authority
 date: "2026-10-31"
-description: "From a broad user request to a specific commitment: how applications can reason about delegated authority."
+description: "From a broad user request to a specific commitment: how applications and banks scale confirmation across a two-axis risk framework."
 tags:
   - WebMCP
   - AI
@@ -13,7 +13,7 @@ tags:
 series:
   id: webmcp-agent-ready-web
   title: "WebMCP and the agent-ready web"
-  part: 3
+  part: 4
 draft: true
 ---
 
@@ -21,7 +21,7 @@ draft: true
 
 “Get me a ride home” is a clear statement of a desired outcome. It tells an assistant where the user wants to end up, but it says nothing about spending €85, accepting a non-refundable cancellation fee, or selecting a premium vehicle.
 
-To carry out that instruction, an agent must translate high-level intent into concrete commitments. When those commitments involve real-world consequences—spending money, signing contracts, or altering persistent data—the application receiving the request faces a fundamental trust boundary: **who holds the legitimate authority to confirm on the user’s behalf?**
+In Part 3, we built a two-phase transaction architecture (`offerId`, `approvalId`, `attemptId`) to ensure the backend never commits a booking without a recorded approval for that specific offer. Yet checking that an approval record exists in the database only answers *whether* an offer was marked approved. When an assistant translates high-level intent into concrete commitments—spending money, signing contracts, or altering persistent data—the application faces a second fundamental trust boundary: **who holds the legitimate authority to confirm on the user’s behalf?**
 
 ## The short answer: an agent cannot merely assert authority
 
@@ -65,21 +65,64 @@ In robust software architecture, **there are strictly three entities that can ev
 
 **There is no fourth option.** An AI assistant cannot manufacture authority on the fly, and a backend cannot accept conversational claims of consent. Every safe delegation architecture maps back to one of these three trust anchors.
 
-## The delegation spectrum: four architectural patterns
+## Risk is not only the amount: how banks already reason
 
-Systems designers implement these three entities across four concrete architectural patterns, trading cognitive friction against implementation complexity:
+Before choosing a confirmation mechanism, an application needs to evaluate how much risk an operation carries. It is tempting to reduce risk to a single number—a euro threshold—but financial systems never evaluate amount in isolation.
 
-### 1. Two-Phase Staging & Deferred Sign-Off (Draft $\rightarrow$ Commit)
-The agent exercises full autonomy during search, filtering, and quote negotiation, but its capability is strictly non-committal: `stageBooking({ quoteId })`. The backend creates a reserved, uncommitted draft and returns an offer reference. The final commitment is handed back to the human for a single, focused review—either in the browser tab or via an out-of-band push notification. Pairing this review with **WebAuthn** provides cryptographic proof of human physical presence without repetitive passwords.
+In banking, Transaction Risk Analysis looks across four explicit criteria before deciding whether a request can proceed silently or demands fresh customer confirmation:
 
-### 2. Standing Policy & Threshold Envelopes (Bounded Pre-Approval)
-The user configures explicit spending envelopes in their account profile (*"Commutes up to €40 are pre-approved"*). When the agent submits a booking request, the backend policy engine evaluates the offer. A €32 ride proceeds autonomously without human interruption; an €85 surge fare triggers an immediate `APPROVAL_REQUIRED` rejection, prompting the agent to escalate the difference to the user. This enforces the principle of [least privilege](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html#enforce-least-privileges) on server-side business logic.
+- **Amount:** The direct financial exposure of the operation.
+- **Reversibility of the operation:** Whether the action can be easily undone without loss (like staging a draft or adding an item to a cart) or is final once executed (like an instant wire transfer or a non-refundable ticket).
+- **Novelty:** Whether the counterparty or context has been seen before—for example, a recurring commute or a whitelisted trusted beneficiary versus a payee or merchant never seen before.
+- **Criticality of the changed state:** Whether the operation modifies sensitive state such as identity records, authentication credentials, standing policy limits, or personal data exports.
 
-### 3. Scoped Capability Delegation (OAuth RAR & Token Exchange)
-When agents operate across independent services (e.g., an assistant coordinating across airlines, hotels, and ground transport), applications cannot rely on shared database flags. Instead, an authorization server issues fine-grained, cryptographically signed capability tokens using **OAuth 2.0 RAR ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396))** and **Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))**. The token explicitly bounds the agent's authority (e.g., `type: "ride_booking"`, `max_amount: 40.00`, `currency: "EUR"`). The booking service independently validates the signature and verifies that the transaction parameters stay within bounds.
+A €30 transfer to a utility company the user pays every month sits in a completely different risk class from a €30 transfer to a newly added foreign account, or an operation that changes the account's recovery email. Scaling confirmation to risk is how banks already keep daily payments frictionless without leaving the vault open.
 
-### 4. Cryptographic Intent Binding (Signed Offer Payloads)
-For high-assurance, treasury, or legal workflows where tampering or non-repudiation is paramount, the server generates a canonical hash of the transaction parameters (offer ID, itemized fees, currency, expiration). The approving entity signs this payload with an asymmetric private key. The backend verifies the digital signature before execution, guaranteeing that neither an intermediate proxy nor a compromised agent runtime altered the offer terms.
+## The confirmation quadrant: four patterns across two axes
+
+When systems designers translate the three confirming entities into concrete architectures, the resulting patterns are often presented as a flat list. In reality, they sit along **two orthogonal axes**, forming four progressive levels from lightest to strongest:
+
+1. **When the user decides (driven by transaction risk):** Does the user pre-authorize a bounded rule in advance so the agent can commit autonomously, or must the human explicitly confirm this single transaction at commit time?
+2. **How authority is proven (driven by the trust boundary):** Is approval verified through internal application state (a database rule or an in-page UI click within one trusted app), or through a cryptographic signature that holds across untrusted boundaries?
+
+```mermaid#wide The two-axis confirmation quadrant: transaction risk moves left to right; trust boundaries move bottom to top.
+flowchart BT
+    subgraph LEFT["Standing Pre-Authorization (Autonomous at Commit)"]
+        direction BT
+        P1["1. Standing Threshold<br/>(App Backend Rule: ≤ EUR 40)"] -->|"Cross-service / federated boundary"| P3["3. Delegated Token<br/>(Cryptographic OAuth RAR: ≤ EUR 100/wk)"]
+    end
+
+    subgraph RIGHT["Per-Transaction Confirmation (Human at Commit)"]
+        direction BT
+        P2["2. Draft and Confirm — Art. 3<br/>(App UI Click: 'Accept EUR 85 fare')"] -->|"Zero-Trust UI / DOM bypass risk"| P4["4. Transaction Signing — Art. 5<br/>(Hardware WebAuthn + Dynamic Linking)"]
+    end
+
+    P1 ==>|"Risk exceeds envelope<br/>(Amount, Novelty, Irreversibility, Criticality)"| P2
+    P3 ==>|"Risk exceeds token bounds"| P4
+```
+
+::: wide
+
+| ▲ **How Authority Is Proven** \ **When User Decides** ► | **Standing Pre-Authorization**<br>*(Low transaction risk: within bounds, known payee, reversible)* | **Per-Transaction Confirmation**<br>*(High transaction risk: high amount, novel payee, irreversible, critical state)* |
+| :--- | :--- | :--- |
+| **Cryptographic Proof**<br>*(Zero-trust boundary: cross-service or untrusted client DOM)* | **3. Delegated Token**<br>OAuth 2.0 RAR ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) & Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))<br>*User grants limited, verifiable authority (e.g., "up to €100, this week only") portable across services.* | **4. Transaction Signing**<br>WebAuthn Passkey + Dynamic Linking<br>*User signs the exact canonical offer hash via hardware authenticator; reserved for real money, identity, or irreversible actions.* |
+| **Application State**<br>*(Trusted first-party boundary: single app & session)* | **1. Standing Threshold**<br>Backend policy engine<br>*Small amounts and reversible operations; the backend approves on its own using a rule the user chose (e.g., up to €40).* | **2. Draft and Confirm (`Draft → Commit`)**<br>Two-phase staging<br>*The agent prepares the draft offer; the user reviews and approves once directly in the page.* |
+
+:::
+
+Let’s examine each of the four patterns from lightest to strongest:
+
+### 1. Standing threshold (Bounded pre-approval)
+For small amounts, known counterparties, and reversible operations, the user configures an explicit rule in their account profile (for example, *"Auto-approve rides home up to €40"*). When the agent submits a booking request, the backend approves on its own by evaluating the offer against that stored rule. A €32 regular commute proceeds autonomously without interrupting the user; an €85 surge fare—or a ride to an unfamiliar destination—exceeds the envelope and triggers an immediate `APPROVAL_REQUIRED` rejection, forcing escalation across the quadrant. This enforces [least privilege](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html#enforce-least-privileges) in server-side business logic.
+
+### 2. Draft and confirm (Two-phase `Draft → Commit`)
+When an operation exceeds the standing threshold, the agent exercises full autonomy during search, filtering, and quote preparation, but its capability remains strictly non-committal. As we built in Part 3, the backend creates a versioned draft (`offerId`) and hands the final decision back to the human for a single confirmation in the page (`approvalId`). This eliminates routine search friction while keeping the user in control of the final commitment.
+
+### 3. Delegated token (OAuth RAR & Token Exchange)
+When an agent operates across independent services—for example, coordinating flights, hotels, and ground transport across separate vendors—applications cannot rely on internal database thresholds. Instead, the user grants the agent a limited, cryptographically verifiable authority (such as *"up to €100, this week only"*), issued by an authorization server using **OAuth 2.0 Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396))** and **Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))**. The token embeds explicit structured constraints (`type: "ride_booking"`, `max_amount: 100.00`, `currency: "EUR"`, `expiry`). Each receiving service independently verifies the token's signature and enforces its bounds without trusting the agent's prose.
+
+### 4. Transaction signing (WebAuthn with dynamic linking)
+For real money, identity changes, or irreversible operations—or whenever the browser DOM itself cannot be trusted against automated UI scripting—an in-page button click is no longer enough. The backend computes a canonical hash of the exact offer terms (offer ID, price, currency, payee, expiry) and issues a single-use cryptographic challenge bound to that hash. The user confirms via **WebAuthn** (Touch ID, Face ID, Windows Hello, or a hardware security key). The device's secure element signs the challenge with a private key that never leaves the hardware, and the backend verifies the signature before committing.
 
 ---
 
@@ -89,14 +132,25 @@ For high-assurance, treasury, or legal workflows where tampering or non-repudiat
 
 | Pattern | Who Confirms | Trust Anchor | User Friction | Best Suited For |
 | :--- | :--- | :--- | :--- | :--- |
-| **1. Staged Preparation** | User | Human presence (UI or WebAuthn / Passkeys) | **Low–Medium** (1 tap at the end) | High-value, irreversible actions (flights, wire transfers) |
-| **2. Threshold Envelopes** | Application Backend | Backend policy engine & stored rules | **Zero** (Interruption-free within bounds) | Frequent, routine consumer actions (daily rides, groceries) |
-| **3. Capability Tokens** | Authorized Delegate | Authorization server (OAuth RAR / RFC 9396) | **Low** (Authorized once per session) | Cross-origin ecosystems and multi-service platforms |
-| **4. Cryptographic Binding** | User or Authorized Delegate | Asymmetric cryptography (PKI / Keypairs) | **Medium** (Signing prompt per transaction) | High-assurance finance, contracts, non-repudiation |
+| **1. Standing Threshold** | Application Backend | Backend policy engine & user-chosen rules | **Zero** (Interruption-free within bounds) | Small amounts, known payees, reversible routine actions (≤ €40 commutes) |
+| **2. Draft and Confirm** | User | In-page application UI (`Draft → Commit`) | **Low** (1 click in the page) | Medium-value actions within a trusted first-party interface |
+| **3. Delegated Token** | Authorized Delegate | Authorization server (OAuth RAR / [RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) | **Low** (Granted once per time/budget window) | Multi-service workflows within a bounded weekly/session budget |
+| **4. Transaction Signing** | User via Hardware | Asymmetric hardware keypair (WebAuthn + Dynamic Linking) | **Medium** (Biometric / passkey touch per action) | Real money above thresholds, novel payees, identity, irreversible actions |
 
-*(Note: Technical authorization is often paired with operational risk backstops—such as spending velocity limits, temporary authorization holds, and automated dispute resolution. These operational buffers manage financial risk, but they do not replace authorization architecture.)*
+*(Note: Technical authorization is paired in production with operational risk backstops—velocity limits, temporary holds, and chargeback workflows. Those buffers contain financial loss, but they do not replace confirmation architecture.)*
 
 :::
+
+## Terminology: transaction signing, not step-up authentication
+
+In security discussions, single-operation confirmation is frequently confused with **step-up authentication**. In an agentic architecture, the distinction between the two is critical:
+
+- **Step-up authentication** raises the session itself to a higher privilege level, where it remains more powerful for some duration (a pattern also formalized in OAuth).
+- **Transaction signing (or transaction authentication)** confirms a single operation and ends right there, without granting the session any broader privileges. In the European Union's **PSD2** Strong Customer Authentication (SCA), cryptographically binding that signature to the exact amount and payee is called **dynamic linking**.
+
+When an AI agent shares the user's browser session, **an elevated session in an agent's hands is the exact risk to avoid.** If confirming an €85 ride raised the session's privilege level for the next fifteen minutes, a malfunctioning or prompt-injected agent could piggyback on that elevated session to execute further high-value actions. Transaction signing with dynamic linking authorizes one exact offer and nothing else.
+
+The mechanism itself is not new; banks already run it in production every day. What changes with WebMCP is the problem: in an agent-operated browser, programmatic shortcuts and DOM automation create paths that can skip confirmation unless we bring transaction signing into the agent world.
 
 ## Consent must have an object
 
@@ -109,11 +163,15 @@ Whichever pattern an application adopts, delegation cannot exist as a floating a
 
 As [OWASP transaction guidance](https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html) notes, binding authorization to immutable transaction data is the only reliable defense against parameter manipulation.
 
-## Looking ahead: building an agent-ready transaction
+## Looking ahead: the zero-trust UI
 
-Deciding who can confirm on the user's behalf is ultimately a product decision. Add too much friction, and the assistant becomes an annoying toy. Infer too much authority, and the application creates accidental dark patterns and unauthorized commitments.
+Deciding who can confirm on the user's behalf is both an architectural and a product decision. Add too much friction to low-risk actions, and the assistant becomes an annoying toy. Infer too much authority on high-risk actions, and the application creates accidental dark patterns and unauthorized commitments.
 
-The engineering challenge is building a verifiable bridge between human intent and programmatic execution. In the final article of this series, we turn theory into code. We will build a complete reference architecture based on **Pattern 1 (Two-Phase Staged Preparation & Offer Binding)**, using WebMCP's `registerTool()` API, typed input schemas (`offerId`, `approvalId`, `attemptId`), and an idempotent backend capable of handling retries safely.
+In Part 3, we implemented **Pattern 2 (Draft and confirm)** using WebMCP's `document.modelContext.registerTool()` API, typed schemas (`offerId`, `approvalId`, `attemptId`), and an idempotent backend. That design holds as long as the agent respects the declared tool boundary and leaves the approval button in the page to the human.
+
+But what happens when an autonomous browser agent—or a vision-language model driving the tab—simply clicks the **Accept this fare** DOM button itself?
+
+In the final article of this series, we confront the **Zero-Trust UI**: how to draw a clear responsibility line between declared WebMCP tools and raw DOM automation, and how to implement **Pattern 4 (Transaction signing with WebAuthn and dynamic linking)** in a working local Node.js example where the private key never leaves the user's device.
 
 ## References and further reading
 
@@ -121,7 +179,7 @@ The engineering challenge is building a verifiable bridge between human intent a
 - [OWASP: Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html) — least privilege and request-time validation.
 - [RFC 9396: OAuth 2.0 Rich Authorization Requests (RAR)](https://datatracker.ietf.org/doc/html/rfc9396) — fine-grained, structured authorization for delegated capabilities.
 - [RFC 8693: OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693) — delegating and transforming security tokens across autonomous systems.
-- [W3C Web Authentication (WebAuthn)](https://www.w3.org/TR/webauthn-2/) — cryptographic proof of user presence.
+- [W3C Web Authentication (WebAuthn Level 3)](https://www.w3.org/TR/webauthn-3/) — cryptographic proof of user presence and user verification.
 - [WebMCP Specification: Agent Baseline Capabilities](https://webmachinelearning.github.io/webmcp/#agent-baseline-capabilities) — session inheritance and security boundaries.
 - [Chrome: Secure WebMCP Tools](https://developer.chrome.com/docs/ai/webmcp/secure-tools) — security guidelines for exposing tools to browser agents.
 - [Working Example Repository](https://github.com/gfilardo/gf-notebook-examples) — runnable code contrasting naive tool shortcuts against verified transaction approval.
