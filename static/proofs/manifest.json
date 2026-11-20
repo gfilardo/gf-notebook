@@ -170,6 +170,18 @@
           "gitCommit": "d92b2f3666989ae19b46e74c8578bfd20139a5b8",
           "bitcoinBlock": 975431,
           "bitcoinBlockTime": null
+        },
+        {
+          "version": 2,
+          "path": "content/posts/webmcp-agent-ready-transaction.md",
+          "fileHash": "0a66b3ac74f70f1e7e79a36a53c3332cab1c4cbf6be479c22472028d02478379",
+          "proofFile": "static/proofs/webmcp-agent-ready-transaction/v2.ots",
+          "otsUrl": "/proofs/webmcp-agent-ready-transaction/v2.ots",
+          "stampedAt": "2026-11-20T11:13:44.415Z",
+          "status": "pending",
+          "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
+          "bitcoinBlock": null,
+          "bitcoinBlockTime": null
         }
       ]
     },
@@ -216,6 +228,18 @@
           "gitCommit": "16d42d6e84775e8f0de0bcb0f90af0cb97110ef2",
           "bitcoinBlock": 975431,
           "bitcoinBlockTime": null
+        },
+        {
+          "version": 2,
+          "path": "content/posts/webmcp-delegated-authority.md",
+          "fileHash": "17caeb739a784d325519308dd7385cd20e27f0d469104ba8683485fb70d4dc23",
+          "proofFile": "static/proofs/webmcp-delegated-authority/v2.ots",
+          "otsUrl": "/proofs/webmcp-delegated-authority/v2.ots",
+          "stampedAt": "2026-11-20T11:13:45.467Z",
+          "status": "pending",
+          "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
+          "bitcoinBlock": null,
+          "bitcoinBlockTime": null
         }
       ]
     },
@@ -249,6 +273,18 @@
           "status": "anchored",
           "gitCommit": "7db348fc99f9a686758e6fd411c0bd25a5f0853a",
           "bitcoinBlock": 975431,
+          "bitcoinBlockTime": null
+        },
+        {
+          "version": 2,
+          "path": "content/posts/webmcp-zero-trust-ui-and-cryptographic-consent.md",
+          "fileHash": "343c7bcfe826384b57e3e0544cbb32f06b17b00466fc3bc9f492ff7497ae5a9b",
+          "proofFile": "static/proofs/webmcp-zero-trust-ui-and-cryptographic-consent/v2.ots",
+          "otsUrl": "/proofs/webmcp-zero-trust-ui-and-cryptographic-consent/v2.ots",
+          "stampedAt": "2026-11-20T11:13:46.484Z",
+          "status": "pending",
+          "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
+          "bitcoinBlock": null,
           "bitcoinBlockTime": null
         }
       ]
