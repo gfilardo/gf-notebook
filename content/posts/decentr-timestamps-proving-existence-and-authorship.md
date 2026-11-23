@@ -3,7 +3,7 @@ id: decentralized-timestamps-pt1
 title: "Decentralized timestamps: proving existence and authorship"
 author: "Giovanni Filardo"
 slug: proving-existence-and-authorship-on-decentralized-ledgers
-date: "2026-11-19"
+date: "2026-11-23"
 description: "A first-principles guide to proving when a digital document existed and who created it, decoupling identity from crypto wallets, and evaluating ledger longevity."
 tags:
   - architecture
@@ -86,28 +86,24 @@ While conceptually straightforward, using your cryptocurrency wallet as your sig
 The alternative architecture—standardized by **OpenTimestamps (OTS)**, designed by Peter Todd—solves these problems by cleanly decoupling the proof of identity from the proof of anteriority.
 
 ```mermaid#narrow The OpenTimestamps model: off-chain Merkle aggregation anchored to a public blockchain.
-flowchart LR
+flowchart TD
     subgraph LOCAL["Author Environment (Zero Fees)"]
-        direction TB
         DOC["Original Document"] --> BUNDLE["Payload + Author Attribution"]
         BUNDLE --> HASH["Initial Leaf Hash"]
     end
 
     subgraph CALENDAR["Calendar Servers (Off-Chain)"]
-        direction TB
         HASH --> TREE["Off-Chain Merkle Tree"]
         OTHERS["Other Users' Hashes"] --> TREE
         TREE --> ROOT["Aggregated Merkle Root"]
     end
 
     subgraph CHAIN["Blockchain Consensus"]
-        direction TB
         ROOT --> TX["Single L1 Transaction<br/>(Funded by Calendar)"]
         TX --> BLOCK["Confirmed Block<br/>(Consensus Timestamp)"]
     end
 
     subgraph PROOF["Verifiable Proof"]
-        direction TB
         BLOCK -.-> RECEIPT["Detached .ots Receipt<br/>(< 1 KB Merkle Path)"]
     end
 ```

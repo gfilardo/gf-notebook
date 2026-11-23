@@ -94,13 +94,13 @@
         {
           "version": 2,
           "path": "content/posts/decentr-timestamps-proving-existence-and-authorship.md",
-          "fileHash": "8c6cd99ddc74371aba180a90a0c9d2351c8400a455be7b31c7df70f75fde0015",
+          "fileHash": "d0f2fa12dbfb1fee87064fae804ff07cefe4fd6f2929878821887eb07b0f1baa",
           "proofFile": "static/proofs/decentralized-timestamps-pt1/v2.ots",
           "otsUrl": "/proofs/decentralized-timestamps-pt1/v2.ots",
-          "stampedAt": "2026-11-19T13:38:02.878Z",
-          "status": "anchored",
-          "gitCommit": "91c97baa619fa4987b879a2e14d0965a67b9d9e6",
-          "bitcoinBlock": 976596,
+          "stampedAt": "2026-11-23T14:05:14.817Z",
+          "status": "pending",
+          "gitCommit": "1fcd073b22f3fa24a2896aa413e4b8da3ceb6241",
+          "bitcoinBlock": null,
           "bitcoinBlockTime": null
         }
       ]
