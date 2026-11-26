@@ -69,9 +69,9 @@
           "proofFile": "static/proofs/decentralized-timestamps-pt2/v3.ots",
           "otsUrl": "/proofs/decentralized-timestamps-pt2/v3.ots",
           "stampedAt": "2026-11-19T13:38:01.832Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "91c97baa619fa4987b879a2e14d0965a67b9d9e6",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 976596,
           "bitcoinBlockTime": null
         }
       ]
@@ -98,9 +98,9 @@
           "proofFile": "static/proofs/decentralized-timestamps-pt1/v2.ots",
           "otsUrl": "/proofs/decentralized-timestamps-pt1/v2.ots",
           "stampedAt": "2026-11-23T14:05:14.817Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "1fcd073b22f3fa24a2896aa413e4b8da3ceb6241",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 977216,
           "bitcoinBlockTime": null
         },
         {
@@ -110,9 +110,9 @@
           "proofFile": "static/proofs/decentralized-timestamps-pt1/v3.ots",
           "otsUrl": "/proofs/decentralized-timestamps-pt1/v3.ots",
           "stampedAt": "2026-11-23T14:08:40.661Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "42f27504393c6a5801b5aaee52bbe72d536da288",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 977216,
           "bitcoinBlockTime": null
         }
       ]
@@ -190,9 +190,9 @@
           "proofFile": "static/proofs/webmcp-agent-ready-transaction/v2.ots",
           "otsUrl": "/proofs/webmcp-agent-ready-transaction/v2.ots",
           "stampedAt": "2026-11-20T11:13:44.415Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 976735,
           "bitcoinBlockTime": null
         },
         {
@@ -202,9 +202,9 @@
           "proofFile": "static/proofs/webmcp-agent-ready-transaction/v3.ots",
           "otsUrl": "/proofs/webmcp-agent-ready-transaction/v3.ots",
           "stampedAt": "2026-11-23T14:08:52.823Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "42f27504393c6a5801b5aaee52bbe72d536da288",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 977216,
           "bitcoinBlockTime": null
         }
       ]
@@ -260,9 +260,9 @@
           "proofFile": "static/proofs/webmcp-delegated-authority/v2.ots",
           "otsUrl": "/proofs/webmcp-delegated-authority/v2.ots",
           "stampedAt": "2026-11-20T11:13:45.467Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 976735,
           "bitcoinBlockTime": null
         },
         {
@@ -272,9 +272,9 @@
           "proofFile": "static/proofs/webmcp-delegated-authority/v3.ots",
           "otsUrl": "/proofs/webmcp-delegated-authority/v3.ots",
           "stampedAt": "2026-11-23T14:08:50.344Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 977216,
           "bitcoinBlockTime": null
         }
       ]
@@ -301,9 +301,9 @@
           "proofFile": "static/proofs/webmcp-people-and-agents/v2.ots",
           "otsUrl": "/proofs/webmcp-people-and-agents/v2.ots",
           "stampedAt": "2026-11-23T14:08:51.465Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "91c97baa619fa4987b879a2e14d0965a67b9d9e6",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 977216,
           "bitcoinBlockTime": null
         }
       ]
@@ -330,9 +330,9 @@
           "proofFile": "static/proofs/webmcp-zero-trust-ui-and-cryptographic-consent/v2.ots",
           "otsUrl": "/proofs/webmcp-zero-trust-ui-and-cryptographic-consent/v2.ots",
           "stampedAt": "2026-11-20T11:13:46.484Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 976735,
           "bitcoinBlockTime": null
         },
         {
@@ -342,9 +342,9 @@
           "proofFile": "static/proofs/webmcp-zero-trust-ui-and-cryptographic-consent/v3.ots",
           "otsUrl": "/proofs/webmcp-zero-trust-ui-and-cryptographic-consent/v3.ots",
           "stampedAt": "2026-11-23T14:08:53.796Z",
-          "status": "pending",
+          "status": "anchored",
           "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
-          "bitcoinBlock": null,
+          "bitcoinBlock": 977216,
           "bitcoinBlockTime": null
         }
       ]
