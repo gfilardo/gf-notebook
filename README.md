@@ -450,7 +450,7 @@ extra wrapper elements:
 - ` ```mermaid#wide Caption `: breaks out to 1088px width.
 - ` ```mermaid#bleed Caption `: spans 100vw viewport width.
 - ` ```mermaid#narrow Caption `: capped at 380px centered.
-- ` ```mermaid#float-left Caption ` / ` ```mermaid#float-right Caption `: floats at 44% width.
+- ` ```mermaid#left Caption ` / ` ```mermaid#right Caption `: floats at 44% width. The `float-left` and `float-right` forms also work.
 
 ````markdown
 ```mermaid#wide Three distinct security questions: authentication, authorization, and transaction approval.
@@ -469,8 +469,8 @@ Images written as standalone Markdown blocks are transformed into semantic HTML5
 
 - **Legends / Captions**: The standard Markdown title attribute (`"Figure legend text"`) renders as `<figcaption>`, with support for inline Markdown (italics, bold, code, links). The redundant browser tooltip attribute on `<img>` is stripped.
 - **Layout hints via URL fragments**: Append `#fragment` to the image URL to map onto responsive CSS layout classes:
-  - `#float-left` (`image-float-left`): Floats left (44% width); prose wraps right; resets to 100% full width on mobile (`<= 760px`).
-  - `#float-right` (`image-float-right`): Floats right (44% width); prose wraps left; resets to 100% full width on mobile.
+  - `#left` or `#float-left` (`image-float-left`): Floats left at 44% width. Prose wraps right. On mobile, the image returns to full width.
+  - `#right` or `#float-right` (`image-float-right`): Floats right at 44% width. Prose wraps left. On mobile, the image returns to full width.
   - `#wide` (`image-wide`): Breaks out of the 730px prose column to align with the 1184px site shell.
   - `#bleed` or `#full` (`image-bleed`): Spans 100vw edge-to-edge across the screen while keeping the caption aligned with the prose column.
   - `#narrow` or `#center` (`image-narrow`): Capped at 380px centered for small UI dialogs and mobile screenshots.
@@ -484,7 +484,7 @@ Images written as standalone Markdown blocks are transformed into semantic HTML5
 
 Wrap a Markdown block (or a group of blocks) in `::: <layout>` (or `::: <widget>#<layout>` / `::: <widget> <layout>`) and
 close with `:::`. This content-agnostic container works for tables and multi-element blocks,
-and gives future widgets the same layout classes and `data-widget` metadata.
+and gives widgets the same layout classes and optional `data-widget` metadata.
 Markdown inside the wrapper renders normally; raw HTML remains disabled.
 The legacy form `:::component <layout>` is also supported.
 
@@ -508,14 +508,58 @@ Choose one layout, using the same geometry and mobile behavior as images:
 - `wide`: centered, up to 1088px inside the site shell.
 - `bleed` or `full`: viewport width.
 - `narrow` or `center`: centered, capped at 380px.
-- `float-left` / `float-right`: 44% width with text wrapping alongside;
-  returns to the prose width on screens up to 760px.
+- `left` / `right` (also `float-left` / `float-right`): 44% width with text wrapping alongside. These return to prose width on screens up to 760px.
 
 The generated markup is `<figure class="component component-wide">` (adding `data-widget="name"`
 when a widget name is provided). Wide blocks return to prose width on mobile.
 Tables fill their container and scroll horizontally in an accessible, keyboard-focusable
 wrapper (`role="region"`). Unknown layout names and missing closing markers fail
 the build with a source filename.
+
+#### Interactive widgets
+
+Add a module under `static/widgets/` and reference it from a Markdown fence.
+The [Design Library](http://localhost:8000/design-library/) runs the same widget
+twice with different props and layouts.
+
+````markdown
+```widget ../widgets/hello.js layout=wide aspect=16/9
+{"label":"Two cycles","cycles":2}
+---
+The wave completes two cycles across the frame. One cycle spans half the width.
+```
+````
+
+Put a JSON object first. For an author-written fallback, add `---` on its own
+line, followed by Markdown. The fallback stays visible without JavaScript
+and if the widget fails to load, and it appears in print even if the widget
+mounted successfully. Use a longer outer fence if the fallback contains
+its own fenced code block. A JSON-only fence uses a generic fallback.
+
+The optional `layout=` accepts `default`, `wide`, `bleed` or `full`, `narrow` or
+`center`, `left` or `float-left`, and `right` or `float-right`. The same layout
+names work for images, Mermaid diagrams, and component wrappers. Omit `layout=`
+for prose width. The optional `aspect=W/H` reserves space using two positive
+integers. URLs resolve against the rendered page URL, including
+its deployment base path. For example, `../widgets/hello.js` works for
+`/design-library/`, while a post at `/posts/example/` needs
+`../../widgets/hello.js` to reach the same file. A leading slash refers to the
+origin root.
+
+Export `default { apiVersion: 1, mount(container, props) { … } }`. The loader
+calls `mount` synchronously with a fresh container inside a shadow root and
+calls the optional returned cleanup function when the widget is disconnected.
+Release resources such as animation frames, observers, and listeners in cleanup.
+The container inherits `--widget-paper`, `--widget-ink`, `--widget-muted`,
+`--widget-accent`, `--widget-line`, and `--widget-surface` from the notebook theme.
+The canvas example reads those variables via `getComputedStyle(container)`.
+Without JavaScript, or after a loading error, readers see the fallback.
+
+Same-origin modules are allowed by default. To trust an external module host,
+add its exact HTTPS origin to `widgetOrigins` in `site.config.json`. The build
+uses the same list for the page's CSP `script-src`. External module servers must
+allow cross-origin module requests, and their module dependencies must also
+come from allowed origins. Imported modules run with the page's privileges.
 
 #### Callouts and admonitions
 

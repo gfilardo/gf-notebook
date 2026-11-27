@@ -204,6 +204,64 @@ main > .eyebrow:first-child { margin-top: 70px; }
 .mermaid-diagram svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .mermaid-diagram figcaption { margin-top: 1rem; color: var(--ink); font: 1rem/1.5 var(--sans); text-align: center; }
 
+md-widget {
+  --widget-paper: var(--paper);
+  --widget-ink: var(--ink);
+  --widget-accent: var(--accent);
+  --widget-muted: var(--muted);
+  --widget-line: var(--line);
+  --widget-surface: var(--surface);
+  display: grid;
+  grid-template: minmax(min-content, 1fr) auto / minmax(0, 1fr);
+  min-height: min-content;
+  margin: 1.5rem 0;
+  border: 1px solid var(--widget-line);
+  border-radius: 4px;
+  background: var(--widget-paper);
+  overflow: hidden;
+}
+md-widget > [data-fallback], md-widget::part(mount), md-widget::part(skeleton) {
+  grid-area: 1 / 1;
+}
+md-widget > [data-fallback], md-widget::part(mount) { min-height: 8rem; }
+md-widget > [data-fallback]:not([hidden]) {
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  color: var(--widget-muted);
+  font: 0.9rem/1.5 var(--sans);
+  text-align: center;
+}
+md-widget > [data-authored]:not([hidden]) {
+  display: flow-root;
+  align-self: center;
+  color: var(--widget-ink);
+  font: inherit;
+  text-align: start;
+}
+md-widget > [data-authored] > :first-child { margin-top: 0; }
+md-widget > [data-authored] > :last-child { margin-bottom: 0; }
+md-widget::part(skeleton) {
+  background: repeating-linear-gradient(135deg, var(--widget-paper) 0 12px, var(--widget-surface) 12px 24px);
+}
+md-widget::part(notice) {
+  grid-area: 2 / 1;
+  padding: 0.5rem 1rem;
+  color: var(--widget-ink);
+  font: 0.8125rem/1.5 var(--sans);
+  text-align: center;
+}
+md-widget[aria-busy]::part(mount) { visibility: hidden; }
+md-widget::part(mount), md-widget::part(container) { min-width: 0; height: 100%; }
+
+@media print {
+  md-widget:has(> [data-authored]) { aspect-ratio: auto !important; break-inside: avoid; }
+  md-widget > [data-authored] { display: block !important; min-height: 0; padding: 1.25rem; }
+  md-widget:has(> [data-authored])::part(mount),
+  md-widget:has(> [data-authored])::part(skeleton),
+  md-widget:has(> [data-authored])::part(notice) { display: none; }
+}
+
 .footer-links { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; margin-left: auto; padding-left: 24px; }
 .footer-links a { font: 12px/1.7 var(--sans); color: var(--muted); text-decoration: none; }
 .footer-links a:hover { color: var(--ink); text-decoration: underline; }

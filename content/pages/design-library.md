@@ -179,21 +179,21 @@ Tables are wrapped in `<div class="table-scroll" role="region" tabindex="0">` fo
 
 ---
 
-## 5. Layout Containers & Future Widgets
+## 5. Interactive Widgets
 
-The `::: <widget>#<layout>` syntax allows binding widgets to specific layout widths while providing semantic fallbacks.
+The same wave widget appears in wide and narrow layouts with different settings. Use **Play** to animate either wave independently. Each widget has a Markdown description that readers can use when the interactive version is unavailable.
 
-::: rate-limiter#wide Rate Limiter Demonstration
+```widget ../widgets/hello.js layout=wide aspect=16/9
+{"label":"Two cycles","cycles":2}
+---
+**Wide widget.** The wave completes two cycles across the frame. One full cycle takes half the frame's width.
+```
 
-| Parameter | Initial Value | Permitted Range |
-| :--- | :--- | :--- |
-| Bucket Capacity | 100 tokens | 10 – 500 tokens |
-| Refill Rate | 10 tokens/sec | 1 – 50 tokens/sec |
-| Initial Fill | 50 tokens | 0 – 100 tokens |
-
-*(Interactive simulation: progressively enhanced with canvas sliders when JavaScript is active.)*
-
-:::
+```widget ../widgets/hello.js layout=narrow aspect=3/1
+{"label":"Five cycles","cycles":5}
+---
+**Narrow widget.** The wave completes five cycles across the frame. One full cycle takes a fifth of the frame's width, so the peaks are closer together.
+```
 
 ---
 

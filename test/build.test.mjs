@@ -9,6 +9,7 @@ import { preview } from '../src/preview.mjs';
 import { verify } from '../src/output.mjs';
 import { templates } from '../src/template.mjs';
 import { XMLValidator, XMLParser } from 'fast-xml-parser';
+import { parseFragment } from 'parse5';
 const root = path.resolve(import.meta.dirname, '..');
 const config = JSON.parse(await readFile(path.join(root, 'site.config.json'), 'utf8'));
 const article = (extra = '', body = 'Some **text**.') => `---\nid: example\ntitle: Example\nauthor: "Giovanni Filardo"\nslug: example\ndate: "2026-10-17"\ndescription: Example article\nfeatured: true\n${extra}\n---\n${body}`;
@@ -39,6 +40,131 @@ test('metadata schemas and source diagnostics', () => {
   assert.match(parsed.body, /<strong>text<\/strong>/);
   const uuidParsed = parseContent('uuid.md', article().replace('id: example', 'id: "f81d4fae-7dec-41d0-a765-00a0c91e6bf6"'), 'post', config);
   assert.equal(uuidParsed.id, 'f81d4fae-7dec-41d0-a765-00a0c91e6bf6');
+});
+
+test('widget fences resolve against rendered pages and preserve JSON inside inert markup', () => {
+  const label = '</script><img onerror=…>\u2028\u2029';
+  const fence = `\`\`\`widget ./widgets/hello.js?one=1&two=2 aspect=16/9\n${JSON.stringify({ label })}\n\`\`\``;
+  const site = { ...config, basePath: '/blog' };
+  for (const [metadata, route] of [['', 'posts'], ['draft: true', 'preview'], ['unlisted: true', 'preview']]) {
+    const { body, hasWidgets } = parseContent('example.md', article(metadata, fence), 'post', site);
+    assert.equal(hasWidgets, true);
+    const [host] = parseFragment(body).childNodes;
+    assert.equal(host.tagName, 'md-widget');
+    assert.deepEqual(Object.fromEntries(host.attrs.map(({ name, value }) => [name, value])), {
+      src: `/blog/${route}/example/widgets/hello.js?one=1&two=2`, style: 'aspect-ratio:16/9'
+    });
+    const [script, fallback, mount] = host.childNodes.filter(node => node.tagName);
+    assert.equal(script.attrs[0].value, 'application/json');
+    const json = script.childNodes[0].value;
+    assert.doesNotMatch(json, /[<\u2028\u2029]/);
+    assert.deepEqual(JSON.parse(json), { label });
+    assert.equal(fallback.tagName, 'div');
+    assert.ok(fallback.attrs.some(attr => attr.name === 'data-fallback'));
+    assert.ok(!fallback.attrs.some(attr => attr.name === 'hidden'));
+    assert.ok(fallback.childNodes[0].value.trim());
+    assert.ok(mount.attrs.some(attr => attr.name === 'hidden'));
+    assert.equal(host.childNodes.filter(node => node.tagName).length, 3);
+  }
+});
+
+test('invalid widget fences report the Markdown source and line', () => {
+  for (const [info, props, reason] of [
+    ['', '{}', /widget module URL/],
+    ['https://[broken', '{}', /widget module URL/],
+    ['//untrusted.test/module.js', '{}', /Disallowed widget/],
+    [`blob:${config.origin}/module.js`, '{}', /Disallowed widget/],
+    ['./x.js', '{', /Malformed widget props/],
+    ['./x.js', '[]', /must be a JSON object/],
+    ['./x.js', 'null', /must be a JSON object/],
+    ['./x.js aspect=0/1', '{}', /aspect ratio/],
+    ['./x.js aspect=1/0', '{}', /aspect ratio/],
+    ['./x.js aspect=16/9 extra', '{}', /Unknown widget option/],
+    ['./x.js layout=huge', '{}', /Unknown widget layout/],
+    ['./x.js aspect=16/9 aspect=3/2', '{}', /Duplicate widget aspect/],
+    ['./x.js layout=wide layout=narrow', '{}', /Duplicate widget layout/]
+  ]) {
+    const raw = article('', `Intro\n\n\`\`\`widget ${info}\n${props}\n\`\`\``);
+    assert.throws(() => parseContent('example.md', raw, 'post', config), error => {
+      const line = raw.split('\n').findIndex(value => value.startsWith('\`\`\`widget')) + 1;
+      assert.ok(error.message.startsWith(`example.md: line ${line}: `));
+      assert.match(error.message, reason);
+      return true;
+    });
+  }
+});
+
+test('widget fences apply the shared layouts and render authored fallbacks as normal Markdown', () => {
+  const fallback = [
+    '**Default:** [Read more][details].',
+    '',
+    '| Setting | Value |',
+    '| --- | --- |',
+    '| Cycles | 2 |',
+    '',
+    '```js',
+    'const cycles = 2;',
+    '```'
+  ].join('\n');
+  const site = { ...config, basePath: '/blog' };
+  for (const [hint, layout] of [
+    ['default', 'default'], ['wide', 'wide'], ['bleed', 'bleed'], ['full', 'bleed'],
+    ['narrow', 'narrow'], ['center', 'narrow'], ['left', 'float-left'], ['right', 'float-right'],
+    ['float-left', 'float-left'], ['float-right', 'float-right']
+  ]) {
+    const raw = article('', `\`\`\`\`widget ./hello.js layout=${hint} aspect=16/9\n{}\n---\n${fallback}\n\`\`\`\`\n\n[details]: /about/`);
+    const { body } = parseContent('example.md', raw, 'post', site);
+    const [figure] = parseFragment(body).childNodes;
+    assert.equal(figure.tagName, 'figure');
+    assert.equal(figure.attrs.find(attr => attr.name === 'class').value, `component component-${layout}`);
+    const host = figure.childNodes.find(node => node.tagName === 'md-widget');
+    const [script, staticContent, mount] = host.childNodes.filter(node => node.tagName);
+    assert.equal(script.tagName, 'script');
+    assert.equal(mount.attrs.some(attr => attr.name === 'data-mount'), true);
+    assert.equal(staticContent.attrs.some(attr => attr.name === 'hidden'), false);
+    assert.equal(staticContent.attrs.find(attr => attr.name === 'slot').value, 'fallback');
+    assert.match(body, /<strong>Default:<\/strong> <a href="\/blog\/about\/">Read more<\/a>/);
+    assert.match(body, /<div class="table-scroll"[^>]+><table>/);
+    assert.match(body, /<code class="language-js">const cycles = 2;/);
+    assert.doesNotMatch(body, /Interactive content is unavailable/);
+
+    const otherBlocks = [
+      `![Diagram](/assets/diagram.png#${hint})`,
+      `\`\`\`mermaid#${hint}\nflowchart LR\n  A --> B\n\`\`\``,
+      `::: ${hint}\nA layout wrapper.\n:::`
+    ].join('\n\n');
+    const otherHtml = parseContent('example.md', article('', otherBlocks), 'post', site).body;
+    assert.match(otherHtml, new RegExp(`class="image-figure image-${layout}"`));
+    assert.match(otherHtml, new RegExp(`class="mermaid-diagram image-${layout}"`));
+    assert.match(otherHtml, new RegExp(`class="component component-${layout}"`));
+  }
+});
+
+test('widget fences diagnose empty fallbacks and nested widgets at their source lines', () => {
+  const fence = '```widget ./hello.js\n{}\n```';
+  for (const [content, reason, lineOffset] of [
+    ['', 'Add Markdown fallback content', 2],
+    [`A description.\n\n${fence}`, 'A widget fallback cannot contain another widget', 5]
+  ]) {
+    const raw = article('', `\`\`\`\`widget ./hello.js\n{}\n---\n${content}\n\`\`\`\``);
+    const opening = raw.split('\n').findIndex(line => line.startsWith('\`\`\`\`widget')) + 1;
+    assert.throws(() => parseContent('example.md', raw, 'post', config), new RegExp(`example.md: line ${opening + lineOffset}: ${reason}`));
+  }
+});
+
+test('widget pages load one host module and align CSP with the origin allowlist', async t => {
+  const dir = await fixture(t);
+  await writeFile(path.join(dir, 'content/posts/widget.md'), article('', `\`\`\`widget https://widgets.example/module.js\n{}\n\`\`\``));
+  await assert.rejects(build(dir, { widgetOrigins: ['https://widgets.example/path'] }), /widgetOrigins/);
+  await assert.rejects(build(dir), /widget.md: line \d+: Disallowed widget/);
+  const files = await build(dir, { basePath: '/my-blog', widgetOrigins: ['https://widgets.example'] });
+  const external = files.get('posts/example/index.html');
+  assert.match(external, /script-src &#39;self&#39; https:\/\/widgets.example/);
+  assert.match(external, /<md-widget src="https:\/\/widgets.example\/module.js">/);
+  const demo = files.get('design-library/index.html');
+  assert.equal([...demo.matchAll(/<md-widget src="\/my-blog\/widgets\/hello.js"/g)].length, 2);
+  assert.equal([...demo.matchAll(/<script type="module" src="\/my-blog\/js\/md-widget.js"/g)].length, 1);
+  assert.doesNotMatch(files.get('about/index.html'), /md-widget\.js|Content-Security-Policy/);
 });
 
 test('duplicate post ids are rejected across documents', async t => {

@@ -1,5 +1,5 @@
 export function validateConfig(site) {
-  const fields = ['title', 'author', 'description', 'language', 'origin', 'basePath', 'navigation', 'copyrightYear'];
+  const fields = ['title', 'author', 'description', 'language', 'origin', 'basePath', 'navigation', 'copyrightYear', 'widgetOrigins'];
   if (!site || typeof site !== 'object' || Object.keys(site).some(k => !fields.includes(k))) throw new Error('Invalid configuration fields');
   for (const key of ['title', 'author', 'description', 'language', 'origin']) {
     if (typeof site[key] !== 'string' || !site[key].trim()) throw new Error(`Invalid configuration: ${key}`);
@@ -10,6 +10,12 @@ export function validateConfig(site) {
   }
   const origin = new URL(site.origin);
   if (origin.protocol !== 'https:' || origin.origin !== site.origin) throw new Error('origin must be an HTTPS origin without a path');
+  if (site.widgetOrigins !== undefined && (!Array.isArray(site.widgetOrigins) || !site.widgetOrigins.every(value => {
+    const url = typeof value === 'string' ? URL.parse(value) : null;
+    return url?.protocol === 'https:' && url.origin === value;
+  }))) {
+    throw new Error('widgetOrigins must be an array of HTTPS origins without paths');
+  }
   if (typeof site.basePath !== 'string' || !/^(?:\/[a-zA-Z0-9_-]+)*$/.test(site.basePath)) throw new Error('Invalid basePath');
   if (!Array.isArray(site.navigation)) throw new Error('navigation must be an array');
   for (const item of site.navigation) {
@@ -17,6 +23,8 @@ export function validateConfig(site) {
   }
   return site;
 }
+export const previewPostRoute = slug => `/preview/${slug}/`;
+
 export function urls(site) {
   const local = route => `${site.basePath}${route}`;
   const absolute = route => `${site.origin}${local(route)}`;

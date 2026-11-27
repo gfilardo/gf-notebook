@@ -6,10 +6,11 @@ import YAML from 'yaml';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import MarkdownIt from 'markdown-it';
-import { componentLayout, CALLOUT_ICONS } from './component-layout.mjs';
+import { markdownWidget, widgetOrigins } from './markdown-widget.mjs';
+import { componentLayout, CALLOUT_ICONS, layouts } from './component-layout.mjs';
 import { renderMermaidSVG } from 'beautiful-mermaid';
 import { isKnownAlgorithm } from './motif.mjs';
-import { contentUrl, urls } from './urls.mjs';
+import { contentUrl, previewPostRoute, urls } from './urls.mjs';
 const ajv = new Ajv({ allErrors: true });
 addFormats(ajv);
 const validators = {};
@@ -17,19 +18,12 @@ for (const kind of ['post', 'page']) {
   validators[kind] = ajv.compile(JSON.parse(await readFile(fileURLToPath(new URL(`../schemas/${kind}.schema.json`, import.meta.url)), 'utf8')));
 }
 const HINT_MAP = {
-  'float-left': 'image-float-left',
-  'float-right': 'image-float-right',
-  'wide': 'image-wide',
-  'bleed': 'image-bleed',
-  'full': 'image-bleed',
-  'narrow': 'image-narrow',
-  'center': 'image-narrow',
+  ...Object.fromEntries([...layouts].map(([name, layout]) => [name, `image-${layout}`])),
   'frame': 'image-frame',
   'border': 'image-frame',
   'invert-dark': 'image-invert-dark',
   'pixelated': 'image-pixelated'
 };
-const PRIMARY_LAYOUTS = new Set(['float-left', 'float-right', 'wide', 'bleed', 'full', 'narrow', 'center']);
 
 function parseImageHints(rawSrc) {
   const hashIdx = rawSrc.indexOf('#');
@@ -41,12 +35,12 @@ function parseImageHints(rawSrc) {
   const validatedHints = [];
   let primaryCount = 0;
   for (const h of rawHints) {
-    if (!HINT_MAP[h]) {
-      throw new Error(`Unknown image layout hint: "${h}". Supported hints: float-left, float-right, wide, bleed (or full), narrow (or center), frame (or border), invert-dark, pixelated`);
+    if (!Object.hasOwn(HINT_MAP, h)) {
+      throw new Error(`Unknown image layout hint: "${h}". Supported hints: ${Object.keys(HINT_MAP).join(', ')}`);
     }
-    if (PRIMARY_LAYOUTS.has(h)) primaryCount++;
+    if (layouts.has(h)) primaryCount++;
     if (primaryCount > 1) {
-      throw new Error(`Conflicting image layout hints in "${rawSrc}": choose at most one primary layout (float-left, float-right, wide, bleed, narrow)`);
+      throw new Error(`Conflicting image layout hints in "${rawSrc}": choose at most one primary layout`);
     }
     validatedHints.push(h);
   }
@@ -67,7 +61,16 @@ export function parseContent(source, raw, kind, site) {
     if (data.series?.motif && !isKnownAlgorithm(data.series.motif)) {
       throw new Error(`Unknown series motif algorithm "${data.series.motif}"`);
     }
-    const md = new MarkdownIt({ html: false }).use(componentLayout);
+    const route = kind === 'post' ? `/posts/${data.slug}/` : `/${data.slug}/`;
+    const renderedRoute = kind === 'post' && (data.draft || data.unlisted) ? previewPostRoute(data.slug) : route;
+    const { local, absolute } = urls(site);
+    const env = {
+      pageUrl: new URL(absolute(renderedRoute)),
+      bodyStartLine: raw.slice(0, raw.length - match[2].length).split('\n').length,
+      widgetOrigins: widgetOrigins(site),
+      hasWidgets: false
+    };
+    const md = new MarkdownIt({ html: false }).use(componentLayout).use(markdownWidget);
     const defaultFence = md.renderer.rules.fence;
     md.renderer.rules.fence = (tokens, index, options, env, self) => {
       const token = tokens[index];
@@ -78,8 +81,8 @@ export function parseContent(source, raw, kind, site) {
       let layoutClass = '';
       if (firstWord.startsWith('mermaid#')) {
         const hint = firstWord.slice('mermaid#'.length).trim();
-        if (!PRIMARY_LAYOUTS.has(hint)) {
-          throw new Error(`Unknown mermaid layout hint: "${hint}". Choose one of: ${[...PRIMARY_LAYOUTS].join(', ')}`);
+        if (!layouts.has(hint)) {
+          throw new Error(`Unknown mermaid layout hint: "${hint}". Choose one of: ${[...layouts.keys()].join(', ')}`);
         }
         layoutClass = ` ${HINT_MAP[hint]}`;
       }
@@ -103,7 +106,7 @@ export function parseContent(source, raw, kind, site) {
       svg = svg.replace('<svg ', `<svg role="img" aria-label="${label}" `);
       return `<figure class="mermaid-diagram${layoutClass}">${svg}${caption ? `<figcaption>${label}</figcaption>` : ''}</figure>\n`;
     };
-    const tokens = md.parse(match[2], {});
+    const tokens = md.parse(match[2], env);
 
     for (let i = 0; i < tokens.length - 2; i++) {
       if (tokens[i].type !== 'paragraph_open') continue;
@@ -131,7 +134,7 @@ export function parseContent(source, raw, kind, site) {
 
       const classes = ['image-figure'];
       const mapped = hints.map(h => HINT_MAP[h]);
-      if (!mapped.some(c => c.startsWith('image-float-') || c === 'image-wide' || c === 'image-bleed' || c === 'image-narrow')) {
+      if (!hints.some(h => layouts.has(h))) {
         classes.push('image-default');
       }
       classes.push(...mapped);
@@ -207,7 +210,7 @@ export function parseContent(source, raw, kind, site) {
           const rawSrc = token.attrGet('src') || '';
           const { cleanSrc, hints } = parseImageHints(rawSrc);
           for (const h of hints) {
-            if (PRIMARY_LAYOUTS.has(h)) {
+            if (layouts.has(h)) {
               throw new Error(`Image with layout hint "${h}" cannot be inline with text; place it on its own line separated by blank lines`);
             }
           }
@@ -225,8 +228,8 @@ export function parseContent(source, raw, kind, site) {
       }
     };
     visit(tokens);
-    const route = kind === 'post' ? `/posts/${data.slug}/` : `/${data.slug}/`;
-    return { date: null, updated: null, draft: false, unlisted: false, featured: false, timestamp: true, tags: [], ...data, source, kind, route, url: urls(site).local(route), body: md.renderer.render(tokens, md.options, {}) };
+    const body = md.renderer.render(tokens, md.options, env);
+    return { date: null, updated: null, draft: false, unlisted: false, featured: false, timestamp: true, tags: [], ...data, source, kind, route, url: local(route), body, hasWidgets: env.hasWidgets };
   } catch (error) {
     throw new Error(`${source}: ${error.message}`, { cause: error });
   }

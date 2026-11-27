@@ -1,9 +1,10 @@
 // A content-agnostic layout container: tables, diagrams, and widgets
 // share the same sizing vocabulary as article images. Also handles callout containers.
-const layouts = new Map([
+export const layouts = new Map([
   ['default', 'default'], ['wide', 'wide'], ['bleed', 'bleed'],
   ['full', 'bleed'], ['narrow', 'narrow'], ['center', 'narrow'],
-  ['float-left', 'float-left'], ['float-right', 'float-right'],
+  ['float-left', 'float-left'], ['left', 'float-left'],
+  ['float-right', 'float-right'], ['right', 'float-right'],
 ]);
 
 export const CALLOUT_TYPES = new Set(['note', 'info', 'tip', 'warning', 'caution', 'important']);

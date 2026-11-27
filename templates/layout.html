@@ -2,6 +2,7 @@
 <html lang="{{ site.language }}">
 <head>
   <meta charset="utf-8">
+  {% if widgetPolicy %}<meta http-equiv="Content-Security-Policy" content="{{ widgetPolicy }}">{% endif %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f8f3ec" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e0a0d" media="(prefers-color-scheme: dark)">
@@ -36,6 +37,7 @@
   {% endif %}
   {% if page.noindex %}<meta name="robots" content="noindex{% if page.preview %}, nofollow{% endif %}">{% endif %}
   {% if diagramViewer %}<script src="{{ diagramViewer }}" defer></script>{% endif %}
+  {% if widgetLoader %}<script type="module" src="{{ widgetLoader }}"></script>{% endif %}
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>

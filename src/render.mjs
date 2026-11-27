@@ -3,13 +3,15 @@ import { tagLabel, tagSlug, validateTags } from './tags.mjs';
 import { indexSeries } from './series.mjs';
 import { systemArt } from './system-art.mjs';
 import { generateArticleMotif, resolveMotifParameters, ALGORITHMS } from './motif.mjs';
-import { urls } from './urls.mjs';
+import { previewPostRoute, urls } from './urls.mjs';
+import { widgetOrigins } from './markdown-widget.mjs';
 import { templates } from './template.mjs';
 const xml = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]);
 export function render(root, site, documents) {
   const env = templates(path.join(root, 'templates'));
   env.addFilter('tagLabel', tagLabel);
   const { local, absolute } = urls(site);
+  const widgetPolicy = ["script-src 'self'", ...[...widgetOrigins(site)].filter(origin => origin !== site.origin)].join(' ');
   validateTags(documents);
   const artwork = systemArt();
   const files = new Map();
@@ -26,7 +28,7 @@ export function render(root, site, documents) {
   }
   const seriesByRoute = indexSeries(documents);
   const previewDocuments = documents.map(d => d.kind === 'post' && (d.draft || d.unlisted)
-    ? { ...d, route: `/preview/${d.slug}/`, url: local(`/preview/${d.slug}/`) } : d);
+    ? { ...d, route: previewPostRoute(d.slug), url: local(previewPostRoute(d.slug)) } : d);
   const previewSeriesByRoute = indexSeries(previewDocuments, true);
   const draftPosts = previewDocuments.filter(d => d.kind === 'post' && (d.draft || d.unlisted))
     .sort((a, b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug));
@@ -78,6 +80,8 @@ export function render(root, site, documents) {
   for (const page of pages) {
     const motifSvg = page.kind === 'post' ? generateArticleMotif(page) : null;
     const context = { site, artwork, navigation, home: local('/'), articles: local('/articles/'), provenanceUrl: local('/provenance/'), favicon: local('/favicon.svg'), stylesheet: local('/css/style.css'), diagramViewer: page.body?.includes('mermaid-diagram') ? local('/js/diagram-viewer.js') : null, feed: local('/feed.xml'), page: { motifSvg, motifs: page.motifs ?? [], draftMotifs: page.draftMotifs ?? [], algorithms: page.algorithms ?? ALGORITHMS, ledger: page.ledger ?? [], seriesNav: (page.preview ? previewSeriesByRoute : seriesByRoute).get(page.route) ?? null, previewIndex: local('/preview/'), preview: false, companion: null, date: null, updated: null, body: '', tags: [], noindex: false, ...page, canonical: absolute(page.route), tagLinks: (page.tags && page.kind ? page.tags : []).map(name => ({ name: tagLabel(name), url: local(`/tags/${tagSlug(name)}/`) })) } };
+    context.widgetLoader = page.hasWidgets ? local('/js/md-widget.js') : null;
+    context.widgetPolicy = page.hasWidgets ? widgetPolicy : null;
     // Standalone page tags are accepted as metadata; only articles join tag archives.
     if (page.kind === 'page' || page.preview) context.page.tagLinks = [];
     if (page.posts) {
