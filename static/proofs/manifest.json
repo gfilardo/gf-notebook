@@ -169,7 +169,7 @@
       ]
     },
     "webmcp-agent-ready-transaction": {
-      "currentPath": "content/posts/webmcp-verifying-offer-approval.md",
+      "currentPath": "content/posts/webmcp-two-phase-approval-pattern.md",
       "versions": [
         {
           "version": 1,
