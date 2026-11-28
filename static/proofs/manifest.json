@@ -206,6 +206,18 @@
           "gitCommit": "42f27504393c6a5801b5aaee52bbe72d536da288",
           "bitcoinBlock": 977216,
           "bitcoinBlockTime": null
+        },
+        {
+          "version": 4,
+          "path": "content/posts/webmcp-two-phase-approval-pattern.md",
+          "fileHash": "b51276240c4fa6a25f7882ede9aa31802d37ddb69119d2f0c7e926822304a1a2",
+          "proofFile": "static/proofs/webmcp-agent-ready-transaction/v4.ots",
+          "otsUrl": "/proofs/webmcp-agent-ready-transaction/v4.ots",
+          "stampedAt": "2026-11-28T09:41:39.736Z",
+          "status": "pending",
+          "gitCommit": "4d3bcdf9e918cf332e31dadcd9c44af485e00ca3",
+          "bitcoinBlock": null,
+          "bitcoinBlockTime": null
         }
       ]
     },
@@ -345,6 +357,18 @@
           "status": "anchored",
           "gitCommit": "0ccdf44f94ba4e9435706363ede96b4bbf6d2e91",
           "bitcoinBlock": 977216,
+          "bitcoinBlockTime": null
+        },
+        {
+          "version": 4,
+          "path": "content/posts/webmcp-zero-trust-ui-and-cryptographic-consent.md",
+          "fileHash": "a97017f1d469f1fc4ba4481647f0e1cab487e5b28d8f3d33b8a64636774da86b",
+          "proofFile": "static/proofs/webmcp-zero-trust-ui-and-cryptographic-consent/v4.ots",
+          "otsUrl": "/proofs/webmcp-zero-trust-ui-and-cryptographic-consent/v4.ots",
+          "stampedAt": "2026-11-28T09:41:40.717Z",
+          "status": "pending",
+          "gitCommit": "4d3bcdf9e918cf332e31dadcd9c44af485e00ca3",
+          "bitcoinBlock": null,
           "bitcoinBlockTime": null
         }
       ]
